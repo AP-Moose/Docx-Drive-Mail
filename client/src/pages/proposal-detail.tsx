@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import type { Proposal } from "@shared/schema";
 import { format } from "date-fns";
+import ProposalPreview from "@/components/proposal-preview";
 
 export default function ProposalDetail() {
   const { id } = useParams();
@@ -213,12 +214,14 @@ export default function ProposalDetail() {
               </>
             ) : (
               <>
-                <div
-                  data-testid="text-proposal-body"
-                  className="bg-card border border-card-border rounded-xl p-4 text-sm leading-relaxed whitespace-pre-wrap"
-                >
-                  {proposal.proposalText}
-                </div>
+                <ProposalPreview
+                  title={proposal.proposalTitle || undefined}
+                  text={proposal.proposalText || ""}
+                  customerName={proposal.customerName}
+                  customerEmail={proposal.customerEmail || undefined}
+                  jobAddress={proposal.jobAddress || undefined}
+                  className="max-h-[500px]"
+                />
                 <Button
                   data-testid="button-edit-proposal"
                   variant="secondary"

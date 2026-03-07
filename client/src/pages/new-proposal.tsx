@@ -32,9 +32,14 @@ import {
   HardHat,
   Send,
   MessageSquare,
+  Eye,
+  Pencil,
+  Plus,
+  X,
 } from "lucide-react";
 import { PROJECT_TYPES } from "@shared/schema";
 import type { Proposal } from "@shared/schema";
+import ProposalPreview from "@/components/proposal-preview";
 
 type Step = "info" | "scope" | "generating" | "review" | "confirm" | "saving" | "done";
 
@@ -98,6 +103,9 @@ export default function NewProposal() {
   const [recognition, setRecognition] = useState<any>(null);
   const [chatInput, setChatInput] = useState("");
   const chatInputRef = useRef<HTMLInputElement>(null);
+  const [previewMode, setPreviewMode] = useState(false);
+  const [emailList, setEmailList] = useState<string[]>([]);
+  const [emailInput, setEmailInput] = useState("");
 
   const [form, setForm] = useState<FormData>({
     customerName: "",
@@ -144,6 +152,25 @@ export default function NewProposal() {
 
   function update(field: keyof FormData, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  function addEmail() {
+    const email = emailInput.trim().replace(/,+$/, "").trim();
+    if (!email) return;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast({ title: "Invalid email", description: "Please enter a valid email address", variant: "destructive" });
+      return;
+    }
+    if (emailList.includes(email)) {
+      toast({ title: "Duplicate", description: "This email is already added", variant: "destructive" });
+      setEmailInput("");
+      return;
+    }
+    const next = [...emailList, email];
+    setEmailList(next);
+    update("customerEmail", next.join(", "));
+    setEmailInput("");
   }
 
   const createMutation = useMutation({
@@ -258,8 +285,12 @@ export default function NewProposal() {
         toast({ title: "Required", description: "Please enter the customer name", variant: "destructive" });
         return;
       }
-      if (form.mode === "proposal_email" && !form.customerEmail.trim()) {
-        toast({ title: "Required", description: "Customer email is required for email mode", variant: "destructive" });
+      if (form.mode === "proposal_email" && emailList.length === 0) {
+        if (emailInput.trim()) {
+          addEmail();
+          return;
+        }
+        toast({ title: "Required", description: "Add at least one customer email for email mode", variant: "destructive" });
         return;
       }
       if (!form.projectType) {
@@ -336,18 +367,60 @@ export default function NewProposal() {
 
             {form.mode === "proposal_email" && (
               <div>
-                <Label htmlFor="customerEmail" className="text-base font-medium">
-                  Customer Email <span className="text-destructive">*</span>
+                <Label className="text-base font-medium">
+                  Customer Email(s) <span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  id="customerEmail"
-                  data-testid="input-customer-email"
-                  type="email"
-                  className="mt-1.5 h-12 text-base"
-                  placeholder="john@email.com"
-                  value={form.customerEmail}
-                  onChange={(e) => update("customerEmail", e.target.value)}
-                />
+                <div className="mt-1.5 space-y-2">
+                  {emailList.map((email, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
+                      <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="flex-1 text-sm truncate" data-testid={`text-email-${i}`}>{email}</span>
+                      <button
+                        type="button"
+                        data-testid={`button-remove-email-${i}`}
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => {
+                          const next = emailList.filter((_, idx) => idx !== i);
+                          setEmailList(next);
+                          update("customerEmail", next.join(", "));
+                        }}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex gap-2">
+                    <Input
+                      data-testid="input-customer-email"
+                      type="email"
+                      className="flex-1 h-12 text-base"
+                      placeholder={emailList.length === 0 ? "john@email.com" : "Add another email…"}
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if ((e.key === "Enter" || e.key === ",") && emailInput.trim()) {
+                          e.preventDefault();
+                          addEmail();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-12 px-3"
+                      data-testid="button-add-email"
+                      onClick={addEmail}
+                      disabled={!emailInput.trim()}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  {emailList.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {emailList.length} recipient{emailList.length > 1 ? "s" : ""}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 
@@ -471,19 +544,51 @@ export default function NewProposal() {
         {/* ── Step 3: Review & Edit ──────────────────── */}
         {step === "review" && proposal && (
           <div className="space-y-5">
-            <div>
-              <h2 className="text-xl font-bold">{proposal.proposalTitle}</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                {proposal.customerName} · {proposal.projectType}
-              </p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-bold">{proposal.proposalTitle}</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {proposal.customerName} · {proposal.projectType}
+                </p>
+              </div>
+              <Button
+                data-testid="button-toggle-preview"
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5"
+                onClick={() => setPreviewMode(!previewMode)}
+              >
+                {previewMode ? (
+                  <>
+                    <Pencil className="w-3.5 h-3.5" />
+                    Edit
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3.5 h-3.5" />
+                    Preview
+                  </>
+                )}
+              </Button>
             </div>
 
-            <Textarea
-              data-testid="textarea-proposal"
-              className="text-sm min-h-[300px] font-mono leading-relaxed resize-none"
-              value={editedText}
-              onChange={(e) => setEditedText(e.target.value)}
-            />
+            {previewMode ? (
+              <ProposalPreview
+                title={proposal.proposalTitle || undefined}
+                text={editedText}
+                customerName={proposal.customerName}
+                customerEmail={proposal.customerEmail || undefined}
+                jobAddress={proposal.jobAddress || undefined}
+                className="max-h-[400px]"
+              />
+            ) : (
+              <Textarea
+                data-testid="textarea-proposal"
+                className="text-sm min-h-[300px] font-mono leading-relaxed resize-none"
+                value={editedText}
+                onChange={(e) => setEditedText(e.target.value)}
+              />
+            )}
 
             <div>
               <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">
@@ -586,12 +691,14 @@ export default function NewProposal() {
               <Label className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
                 Proposal Preview
               </Label>
-              <div
-                data-testid="preview-proposal-text"
-                className="bg-muted/50 border border-border rounded-xl p-4 max-h-[200px] overflow-y-auto text-sm font-mono whitespace-pre-wrap leading-relaxed"
-              >
-                {editedText}
-              </div>
+              <ProposalPreview
+                title={proposal.proposalTitle || undefined}
+                text={editedText}
+                customerName={proposal.customerName}
+                customerEmail={proposal.customerEmail || undefined}
+                jobAddress={proposal.jobAddress || undefined}
+                className="max-h-[300px]"
+              />
               <button
                 data-testid="button-edit-proposal"
                 className="text-xs text-primary font-medium"
@@ -633,10 +740,15 @@ export default function NewProposal() {
                 </div>
 
                 <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-3">
-                  <p className="text-sm text-amber-800 dark:text-amber-300 font-medium flex items-center gap-2">
-                    <Mail className="w-4 h-4 shrink-0" />
-                    This will send the email directly to {form.customerEmail}
-                  </p>
+                  <div className="text-sm text-amber-800 dark:text-amber-300 font-medium flex items-start gap-2">
+                    <Mail className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <div>This will send the email directly to:</div>
+                      {emailList.map((email, i) => (
+                        <div key={i} className="font-bold" data-testid={`confirm-email-${i}`}>{email}</div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </>
             )}
@@ -705,7 +817,7 @@ export default function NewProposal() {
                   </div>
                   <div className="flex-1">
                     <div className="font-medium">Email Sent</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">Sent to {proposal.customerEmail} — view in Gmail Sent</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">Sent to {proposal.customerEmail?.split(", ").length || 0} recipient{(proposal.customerEmail?.split(", ").length || 0) > 1 ? "s" : ""} — view in Gmail Sent</div>
                   </div>
                 </a>
               )}
