@@ -530,7 +530,7 @@ export default function NewProposal() {
               <h2 className="text-xl font-semibold">Saving Your Proposal</h2>
               <p className="text-muted-foreground mt-2 text-sm px-4">
                 Generating Word document, uploading to Google Drive
-                {form.mode === "proposal_email" ? ", and creating Gmail draft" : ""}…
+                {form.mode === "proposal_email" ? ", and sending email" : ""}…
               </p>
             </div>
           </div>
@@ -546,7 +546,7 @@ export default function NewProposal() {
               <h2 className="text-2xl font-bold mt-2">All Done!</h2>
               <p className="text-muted-foreground text-sm">
                 Your proposal has been saved to Google Drive
-                {proposal.gmailDraftId ? " and a Gmail draft has been created." : "."}
+                {proposal.gmailDraftId ? " and the email has been sent." : "."}
               </p>
             </div>
 
@@ -571,18 +571,18 @@ export default function NewProposal() {
 
               {proposal.gmailDraftId && (
                 <a
-                  href="https://mail.google.com/mail/#drafts"
+                  href="https://mail.google.com/mail/#sent"
                   target="_blank"
                   rel="noopener noreferrer"
-                  data-testid="link-open-draft"
+                  data-testid="link-view-sent"
                   className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4"
                 >
-                  <div className="bg-red-100 dark:bg-red-900/30 rounded-full p-2.5">
-                    <Mail className="w-5 h-5 text-red-600 dark:text-red-400" />
+                  <div className="bg-green-100 dark:bg-green-900/30 rounded-full p-2.5">
+                    <Mail className="w-5 h-5 text-green-600 dark:text-green-400" />
                   </div>
                   <div className="flex-1">
-                    <div className="font-medium">Open Gmail Draft</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">Ready to send to {proposal.customerEmail}</div>
+                    <div className="font-medium">Email Sent</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">Sent to {proposal.customerEmail} — view in Gmail Sent</div>
                   </div>
                 </a>
               )}

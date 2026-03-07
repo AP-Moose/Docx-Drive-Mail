@@ -255,14 +255,14 @@ export default function ProposalDetail() {
 
             {proposal.gmailDraftId && (
               <a
-                href="https://mail.google.com/mail/#drafts"
+                href="https://mail.google.com/mail/#sent"
                 target="_blank"
                 rel="noopener noreferrer"
                 data-testid="link-gmail"
                 className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4"
               >
-                <Mail className="w-5 h-5 text-red-500" />
-                <span className="font-medium">Open Gmail Draft</span>
+                <Mail className="w-5 h-5 text-green-500" />
+                <span className="font-medium">View Sent Email in Gmail</span>
               </a>
             )}
 
