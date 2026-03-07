@@ -156,7 +156,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { fileId, webViewLink } = await uploadToDrive(
         buffer,
         filename,
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        proposal.customerName
       );
 
       // Make it public (anyone with link can view)
@@ -243,7 +244,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { fileId, webViewLink } = await uploadToDrive(
         buffer,
         filename,
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        proposal.customerName
       );
       await setFilePublic(fileId);
 
