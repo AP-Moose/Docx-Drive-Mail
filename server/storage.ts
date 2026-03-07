@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { proposals, type Proposal, type InsertProposal } from "@shared/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   getProposal(id: number): Promise<Proposal | undefined>;
@@ -8,7 +8,7 @@ export interface IStorage {
   createProposal(data: InsertProposal): Promise<Proposal>;
   updateProposal(id: number, data: Partial<Proposal>): Promise<Proposal>;
   deleteProposal(id: number): Promise<void>;
-  getNextVersion(customerName: string, projectType: string): Promise<number>;
+  getNextVersion(customerName: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -22,7 +22,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProposal(data: InsertProposal): Promise<Proposal> {
-    const version = await this.getNextVersion(data.customerName, data.projectType);
+    const version = await this.getNextVersion(data.customerName);
     const [row] = await db
       .insert(proposals)
       .values({ ...data, version })
@@ -43,14 +43,11 @@ export class DatabaseStorage implements IStorage {
     await db.delete(proposals).where(eq(proposals.id, id));
   }
 
-  async getNextVersion(customerName: string, projectType: string): Promise<number> {
-    const today = new Date().toISOString().split("T")[0];
+  async getNextVersion(customerName: string): Promise<number> {
     const existing = await db
       .select()
       .from(proposals)
-      .where(
-        and(eq(proposals.customerName, customerName), eq(proposals.projectType, projectType))
-      )
+      .where(eq(proposals.customerName, customerName))
       .orderBy(desc(proposals.version));
     if (existing.length === 0) return 1;
     return (existing[0].version || 0) + 1;

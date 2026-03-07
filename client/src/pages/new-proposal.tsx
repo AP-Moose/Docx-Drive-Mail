@@ -5,13 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -37,7 +30,6 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { PROJECT_TYPES } from "@shared/schema";
 import type { Proposal } from "@shared/schema";
 import ProposalPreview from "@/components/proposal-preview";
 
@@ -47,9 +39,6 @@ interface FormData {
   customerName: string;
   customerEmail: string;
   jobAddress: string;
-  projectType: string;
-  priceEstimate: string;
-  timeline: string;
   scopeNotes: string;
   mode: string;
 }
@@ -74,7 +63,7 @@ function ProgressBar({ step }: { step: Step }) {
 
 function StepLabel({ step, mode }: { step: Step; mode: string }) {
   const labels: Record<Step, string> = {
-    info: "Step 1 of 5 — Job Info",
+    info: "Step 1 of 5 — Customer Info",
     scope: "Step 2 of 5 — Describe the Work",
     generating: "Generating your proposal…",
     review: "Step 3 of 5 — Review & Edit",
@@ -111,9 +100,6 @@ export default function NewProposal() {
     customerName: "",
     customerEmail: "",
     jobAddress: "",
-    projectType: "",
-    priceEstimate: "",
-    timeline: "",
     scopeNotes: "",
     mode: initialMode,
   });
@@ -179,9 +165,7 @@ export default function NewProposal() {
         customerName: form.customerName,
         customerEmail: form.customerEmail || null,
         jobAddress: form.jobAddress || null,
-        projectType: form.projectType,
-        priceEstimate: form.priceEstimate || null,
-        timeline: form.timeline || null,
+        projectType: "General",
         scopeNotes: form.scopeNotes,
         mode: form.mode,
       });
@@ -293,10 +277,6 @@ export default function NewProposal() {
         toast({ title: "Required", description: "Add at least one customer email for email mode", variant: "destructive" });
         return;
       }
-      if (!form.projectType) {
-        toast({ title: "Required", description: "Please select a project type", variant: "destructive" });
-        return;
-      }
       setStep("scope");
     } else if (step === "scope") {
       if (!form.scopeNotes.trim()) {
@@ -338,7 +318,7 @@ export default function NewProposal() {
           <div className="flex items-center gap-2 flex-1">
             <HardHat className="w-5 h-5" />
             <span className="font-semibold">
-              {form.mode === "proposal_email" ? "New Proposal + Email" : "Proposal Only"}
+              {form.mode === "proposal_email" ? "New Proposal" : "Proposal Only"}
             </span>
           </div>
         </div>
@@ -348,7 +328,6 @@ export default function NewProposal() {
 
       <div className="flex-1 px-5 py-6">
 
-        {/* ── Step 1: Info ─────────────────────────────── */}
         {step === "info" && (
           <div className="space-y-5">
             <div>
@@ -435,98 +414,67 @@ export default function NewProposal() {
                 onChange={(e) => update("jobAddress", e.target.value)}
               />
             </div>
-
-            <div>
-              <Label className="text-base font-medium">
-                Project Type <span className="text-destructive">*</span>
-              </Label>
-              <Select value={form.projectType} onValueChange={(v) => update("projectType", v)}>
-                <SelectTrigger data-testid="select-project-type" className="mt-1.5 h-12 text-base">
-                  <SelectValue placeholder="Select type…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PROJECT_TYPES.map((t) => (
-                    <SelectItem key={t} value={t} className="text-base py-3">
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="priceEstimate" className="text-base font-medium">
-                Price / Estimate <span className="text-muted-foreground text-sm font-normal">(optional)</span>
-              </Label>
-              <Input
-                id="priceEstimate"
-                data-testid="input-price"
-                className="mt-1.5 h-12 text-base"
-                placeholder="$5,000 – $7,500"
-                value={form.priceEstimate}
-                onChange={(e) => update("priceEstimate", e.target.value)}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="timeline" className="text-base font-medium">
-                Timeline <span className="text-muted-foreground text-sm font-normal">(optional)</span>
-              </Label>
-              <Input
-                id="timeline"
-                data-testid="input-timeline"
-                className="mt-1.5 h-12 text-base"
-                placeholder="2–3 weeks"
-                value={form.timeline}
-                onChange={(e) => update("timeline", e.target.value)}
-              />
-            </div>
           </div>
         )}
 
-        {/* ── Step 2: Scope ────────────────────────────── */}
         {step === "scope" && (
-          <div className="space-y-4">
-            <div>
-              <Label className="text-base font-medium">Describe the Project</Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                Use plain English. Mention what you're replacing, installing, repairing, materials, allowances, exclusions, and anything the customer asked for.
+          <div className="space-y-5">
+            <div className="text-center space-y-2">
+              <p className="text-base font-medium">What work are you doing?</p>
+              <p className="text-sm text-muted-foreground">
+                Describe the job in your own words — materials, scope, price, timeline.
+                The AI will figure out the rest.
               </p>
             </div>
 
-            <Textarea
-              data-testid="textarea-scope"
-              className="mt-2 text-base min-h-[220px] resize-none"
-              placeholder="Example: Removing existing tile floor in master bath, about 120 sq ft. Installing new porcelain tile (customer picked from showroom). Replacing toilet and vanity. Keeping existing shower. Labor includes demo, prep, tile work, and fixture install. No electrical work included."
-              value={form.scopeNotes}
-              onChange={(e) => update("scopeNotes", e.target.value)}
-            />
-
             {recognition && (
-              <Button
+              <button
                 data-testid="button-voice"
                 type="button"
-                variant={isListening ? "destructive" : "secondary"}
-                className="w-full h-12 gap-2"
                 onClick={toggleVoice}
+                className={`w-full flex flex-col items-center justify-center gap-3 rounded-2xl p-8 transition-all active:scale-[0.97] ${
+                  isListening
+                    ? "bg-red-500 text-white shadow-lg shadow-red-500/25"
+                    : "bg-primary/10 text-primary border-2 border-dashed border-primary/30"
+                }`}
               >
                 {isListening ? (
-                  <>
-                    <MicOff className="w-5 h-5" />
-                    Stop Recording
-                  </>
+                  <MicOff className="w-10 h-10" />
                 ) : (
-                  <>
-                    <Mic className="w-5 h-5" />
-                    Tap to Speak
-                  </>
+                  <Mic className="w-10 h-10" />
                 )}
-              </Button>
+                <span className="text-lg font-semibold">
+                  {isListening ? "Tap to Stop" : "Tap to Speak"}
+                </span>
+                {!isListening && (
+                  <span className="text-sm opacity-70">Describe the job out loud</span>
+                )}
+                {isListening && (
+                  <span className="text-sm opacity-80 animate-pulse">Listening…</span>
+                )}
+              </button>
             )}
+
+            <div className="relative">
+              {!recognition && (
+                <Label className="text-base font-medium">Describe the Project</Label>
+              )}
+              {recognition && (
+                <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide font-medium">
+                  Or type it out:
+                </p>
+              )}
+              <Textarea
+                data-testid="textarea-scope"
+                className="text-base min-h-[180px] resize-none"
+                placeholder="Example: Tear out old deck, build new 16x20 composite deck with aluminum railing. Customer wants Trex Enhance in Toasted Sand. Price around $18,000, should take about 3 weeks."
+                value={form.scopeNotes}
+                onChange={(e) => update("scopeNotes", e.target.value)}
+              />
+            </div>
           </div>
         )}
 
-        {/* ── Generating ───────────────────────────────── */}
         {step === "generating" && (
           <div className="flex flex-col items-center justify-center py-16 space-y-5">
             <div className="bg-primary/10 rounded-full p-6">
@@ -541,14 +489,14 @@ export default function NewProposal() {
           </div>
         )}
 
-        {/* ── Step 3: Review & Edit ──────────────────── */}
         {step === "review" && proposal && (
           <div className="space-y-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-bold">{proposal.proposalTitle}</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {proposal.customerName} · {proposal.projectType}
+                  {proposal.customerName}
+                  {proposal.jobAddress ? ` · ${proposal.jobAddress}` : ""}
                 </p>
               </div>
               <Button
@@ -639,22 +587,19 @@ export default function NewProposal() {
                 <Input
                   ref={chatInputRef}
                   data-testid="input-chat-refine"
-                  className="flex-1 h-11 text-sm"
+                  className="flex-1 h-10 text-sm"
                   placeholder='e.g. "Add a warranty section" or "Change price to $10,000"'
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleChatSubmit();
-                    }
+                    if (e.key === "Enter" && chatInput.trim()) handleChatSubmit();
                   }}
                   disabled={refineMutation.isPending}
                 />
                 <Button
                   data-testid="button-chat-send"
-                  size="icon"
-                  className="h-11 w-11 shrink-0"
+                  size="sm"
+                  className="h-10 px-3"
                   onClick={handleChatSubmit}
                   disabled={refineMutation.isPending || !chatInput.trim()}
                 >
@@ -666,122 +611,97 @@ export default function NewProposal() {
                 </Button>
               </div>
               {refineMutation.isPending && (
-                <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Updating proposal…
-                </div>
+                <p className="text-sm text-muted-foreground mt-2 flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Rewriting…
+                </p>
               )}
             </div>
           </div>
         )}
 
-        {/* ── Step 4: Confirm ─────────────────────────── */}
         {step === "confirm" && proposal && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-lg font-bold">Review Before Sending</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                {form.mode === "proposal_email"
-                  ? "Review your proposal and email below. Edit anything, then hit send."
-                  : "Review your proposal below, then upload to Google Drive."}
-              </p>
-            </div>
+          <div className="space-y-5">
+            <h2 className="text-lg font-bold">Review Before Sending</h2>
 
-            <div className="space-y-2">
-              <Label className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-                Proposal Preview
-              </Label>
-              <ProposalPreview
-                title={proposal.proposalTitle || undefined}
-                text={editedText}
-                customerName={proposal.customerName}
-                customerEmail={proposal.customerEmail || undefined}
-                jobAddress={proposal.jobAddress || undefined}
-                className="max-h-[300px]"
-              />
-              <button
-                data-testid="button-edit-proposal"
-                className="text-xs text-primary font-medium"
-                onClick={() => setStep("review")}
-              >
-                Go back and edit proposal
-              </button>
-            </div>
+            <ProposalPreview
+              title={proposal.proposalTitle || undefined}
+              text={editedText}
+              customerName={proposal.customerName}
+              customerEmail={proposal.customerEmail || undefined}
+              jobAddress={proposal.jobAddress || undefined}
+              className="max-h-[300px]"
+            />
 
             {form.mode === "proposal_email" && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="emailSubject" className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-                    Email Subject
-                  </Label>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="emailSubject" className="text-sm font-medium">Email Subject</Label>
                   <Input
                     id="emailSubject"
                     data-testid="input-email-subject"
-                    className="h-11 text-sm"
+                    className="mt-1 h-10 text-sm"
                     value={editedEmailSubject}
                     onChange={(e) => setEditedEmailSubject(e.target.value)}
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="emailBody" className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-                    Email Body
-                  </Label>
+                <div>
+                  <Label htmlFor="emailBody" className="text-sm font-medium">Email Body</Label>
                   <Textarea
                     id="emailBody"
                     data-testid="textarea-email-body"
-                    className="text-sm min-h-[160px] resize-none leading-relaxed"
+                    className="mt-1 text-sm min-h-[120px] resize-none"
                     value={editedEmailBody}
                     onChange={(e) => setEditedEmailBody(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    [PROPOSAL_LINK] will be replaced with the Google Drive link automatically.
-                  </p>
                 </div>
 
-                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-3">
-                  <div className="text-sm text-amber-800 dark:text-amber-300 font-medium flex items-start gap-2">
-                    <Mail className="w-4 h-4 shrink-0 mt-0.5" />
-                    <div>
-                      <div>This will send the email directly to:</div>
-                      {emailList.map((email, i) => (
-                        <div key={i} className="font-bold" data-testid={`confirm-email-${i}`}>{email}</div>
-                      ))}
-                    </div>
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-2">
+                    This will send the email directly to:
+                  </p>
+                  <div className="space-y-1">
+                    {emailList.map((email, i) => (
+                      <p key={i} className="text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                        <Mail className="w-3.5 h-3.5" />
+                        <span data-testid={`confirm-email-${i}`}>{email}</span>
+                      </p>
+                    ))}
                   </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
         )}
 
-        {/* ── Saving ───────────────────────────────────── */}
         {step === "saving" && (
           <div className="flex flex-col items-center justify-center py-16 space-y-5">
             <div className="bg-primary/10 rounded-full p-6">
               <Loader2 className="w-10 h-10 text-primary animate-spin" />
             </div>
             <div className="text-center">
-              <h2 className="text-xl font-semibold">Saving Your Proposal</h2>
+              <h2 className="text-xl font-semibold">
+                {form.mode === "proposal_email" ? "Sending…" : "Uploading…"}
+              </h2>
               <p className="text-muted-foreground mt-2 text-sm px-4">
-                Generating Word document, uploading to Google Drive
-                {form.mode === "proposal_email" ? ", and sending email" : ""}…
+                Generating Word doc, uploading to Drive
+                {form.mode === "proposal_email" ? ", and sending email…" : "…"}
               </p>
             </div>
           </div>
         )}
 
-        {/* ── Done ────────────────────────────────────── */}
         {step === "done" && proposal && (
-          <div className="space-y-6">
-            <div className="flex flex-col items-center py-6 text-center space-y-2">
+          <div className="space-y-5">
+            <div className="flex flex-col items-center text-center py-6 space-y-3">
               <div className="bg-green-100 dark:bg-green-900/30 rounded-full p-4">
                 <CheckCircle2 className="w-10 h-10 text-green-600 dark:text-green-400" />
               </div>
-              <h2 className="text-2xl font-bold mt-2">All Done!</h2>
+              <h2 className="text-2xl font-bold">All Done!</h2>
               <p className="text-muted-foreground text-sm">
                 Your proposal has been saved to Google Drive
-                {proposal.gmailDraftId ? " and the email has been sent." : "."}
+                {proposal.gmailDraftId ? " and emailed to the customer." : "."}
               </p>
             </div>
 
@@ -791,16 +711,12 @@ export default function NewProposal() {
                   href={proposal.driveWebLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  data-testid="link-open-proposal"
-                  className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4"
+                  data-testid="link-drive"
+                  className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4 active:bg-muted transition-colors"
                 >
-                  <div className="bg-blue-100 dark:bg-blue-900/30 rounded-full p-2.5">
-                    <ExternalLink className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium">Open Proposal in Drive</div>
-                    <div className="text-xs text-muted-foreground mt-0.5 truncate">{proposal.driveWebLink}</div>
-                  </div>
+                  <ExternalLink className="w-5 h-5 text-blue-600" />
+                  <span className="font-medium flex-1">Open in Google Drive</span>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
                 </a>
               )}
 
@@ -809,16 +725,12 @@ export default function NewProposal() {
                   href="https://mail.google.com/mail/#sent"
                   target="_blank"
                   rel="noopener noreferrer"
-                  data-testid="link-view-sent"
-                  className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4"
+                  data-testid="link-gmail"
+                  className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4 active:bg-muted transition-colors"
                 >
-                  <div className="bg-green-100 dark:bg-green-900/30 rounded-full p-2.5">
-                    <Mail className="w-5 h-5 text-green-600 dark:text-green-400" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium">Email Sent</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">Sent to {proposal.customerEmail?.split(", ").length || 0} recipient{(proposal.customerEmail?.split(", ").length || 0) > 1 ? "s" : ""} — view in Gmail Sent</div>
-                  </div>
+                  <Mail className="w-5 h-5 text-green-500" />
+                  <span className="font-medium flex-1">Email Sent</span>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
                 </a>
               )}
 
@@ -826,86 +738,69 @@ export default function NewProposal() {
                 <button
                   onClick={copyLink}
                   data-testid="button-copy-link"
-                  className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4"
+                  className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4 active:bg-muted transition-colors text-left"
                 >
-                  <div className="bg-muted rounded-full p-2.5">
-                    <Copy className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                  <div className="font-medium">Copy Shareable Link</div>
+                  <Copy className="w-5 h-5 text-muted-foreground" />
+                  <span className="font-medium flex-1">Copy Shareable Link</span>
                 </button>
               )}
 
               <a
-                href={`/api/proposals/${proposal.id}/docx`}
-                data-testid="link-download-docx"
-                className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4"
+                href={`/api/proposals/${proposalId}/docx`}
+                data-testid="link-docx"
+                className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4 active:bg-muted transition-colors"
               >
-                <div className="bg-muted rounded-full p-2.5">
-                  <FileDown className="w-5 h-5 text-muted-foreground" />
-                </div>
-                <div className="font-medium">Download Word Document</div>
+                <FileDown className="w-5 h-5 text-muted-foreground" />
+                <span className="font-medium flex-1">Download Word Document</span>
+                <ArrowRight className="w-4 h-4 text-muted-foreground" />
               </a>
             </div>
 
             <Button
-              data-testid="button-new-proposal-again"
-              className="w-full h-12"
+              data-testid="button-new-proposal"
+              className="w-full h-12 mt-4"
               onClick={() => navigate("/")}
             >
+              <HardHat className="w-4 h-4 mr-2" />
               Back to Home
             </Button>
           </div>
         )}
       </div>
 
-      {/* Bottom nav */}
       {(step === "info" || step === "scope" || step === "review" || step === "confirm") && (
-        <div className="px-5 pb-8 pt-4 border-t border-border flex gap-3">
-          {step !== "info" && (
-            <Button
-              data-testid="button-back"
-              variant="secondary"
-              className="flex-1 h-12"
-              onClick={() => {
-                if (step === "scope") setStep("info");
-                else if (step === "review") setStep("scope");
-                else if (step === "confirm") setStep("review");
-              }}
-              disabled={isLoading}
-            >
-              <ArrowLeft className="w-4 h-4 mr-1" />
-              Back
-            </Button>
-          )}
+        <div className="sticky bottom-0 bg-background border-t px-5 py-4">
           <Button
             data-testid="button-next"
-            className="flex-1 h-12"
+            className="w-full h-14 text-base font-semibold gap-2"
             onClick={handleNext}
             disabled={isLoading}
           >
             {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin" />
             ) : step === "confirm" ? (
-              form.mode === "proposal_email" ? (
-                <>
-                  <Send className="w-4 h-4 mr-1" />
-                  Upload & Send Email
-                </>
-              ) : (
-                <>
-                  <Upload className="w-4 h-4 mr-1" />
-                  Upload to Drive
-                </>
-              )
+              <>
+                {form.mode === "proposal_email" ? (
+                  <>
+                    <Send className="w-5 h-5" />
+                    Upload & Send Email
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-5 h-5" />
+                    Upload to Drive
+                  </>
+                )}
+              </>
             ) : step === "review" ? (
               <>
+                <ArrowRight className="w-5 h-5" />
                 {form.mode === "proposal_email" ? "Review Email & Send" : "Confirm & Upload"}
-                <ArrowRight className="w-4 h-4 ml-1" />
               </>
             ) : (
               <>
+                <ArrowRight className="w-5 h-5" />
                 Next
-                <ArrowRight className="w-4 h-4 ml-1" />
               </>
             )}
           </Button>

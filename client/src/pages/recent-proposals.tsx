@@ -45,9 +45,7 @@ export default function RecentProposals() {
         customerName: p.customerName,
         customerEmail: p.customerEmail,
         jobAddress: p.jobAddress,
-        projectType: p.projectType,
-        priceEstimate: p.priceEstimate,
-        timeline: p.timeline,
+        projectType: p.projectType || "General",
         scopeNotes: p.scopeNotes,
         mode: p.mode,
       });
@@ -108,8 +106,9 @@ export default function RecentProposals() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-base truncate">{p.customerName}</p>
                   <p className="text-sm text-muted-foreground">
-                    {p.projectType}
-                    {p.jobAddress ? ` · ${p.jobAddress}` : ""}
+                    {p.projectType && p.projectType !== "General" ? p.projectType : ""}
+                    {p.projectType && p.projectType !== "General" && p.jobAddress ? " · " : ""}
+                    {p.jobAddress || ""}
                   </p>
                 </div>
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor(p.status)}`}>

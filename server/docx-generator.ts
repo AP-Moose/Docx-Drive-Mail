@@ -16,7 +16,7 @@ import type { Proposal } from "@shared/schema";
 
 function buildFilename(proposal: Proposal): string {
   const name = proposal.customerName.replace(/[^a-zA-Z0-9 ]/g, "").trim();
-  const type = proposal.projectType;
+  const type = proposal.projectType !== "General" ? proposal.projectType : "";
   const addr = (proposal.jobAddress || "").replace(/[^a-zA-Z0-9 ]/g, "").trim().substring(0, 30);
   const date = new Date().toISOString().split("T")[0];
   const version = `v${proposal.version}`;
@@ -84,7 +84,7 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
   const docChildren: any[] = [
     // Title
     new Paragraph({
-      text: proposal.proposalTitle || `${proposal.projectType} Proposal`,
+      text: proposal.proposalTitle || "Proposal",
       heading: HeadingLevel.TITLE,
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },

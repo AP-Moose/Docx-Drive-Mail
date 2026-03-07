@@ -11,15 +11,13 @@ export interface GeneratedProposal {
   body: string;
   emailSubject: string;
   emailBody: string;
+  projectType: string;
 }
 
 export async function generateProposal(
   customerName: string,
   customerEmail: string | null | undefined,
   jobAddress: string | null | undefined,
-  projectType: string,
-  priceEstimate: string | null | undefined,
-  timeline: string | null | undefined,
   scopeNotes: string,
   mode: string
 ): Promise<GeneratedProposal> {
@@ -31,25 +29,27 @@ Do NOT invent facts not provided. Use [TBD] for missing critical details.`;
   const userPrompt = `Write a contractor proposal with these details:
 
 Customer: ${customerName}
-Project Type: ${projectType}
 ${jobAddress ? `Job Address: ${jobAddress}` : ""}
-${priceEstimate ? `Price/Estimate: ${priceEstimate}` : ""}
-${timeline ? `Timeline: ${timeline}` : ""}
 
 Scope Notes from Contractor:
 ${scopeNotes}
+
+Based on the scope notes, determine the project type (e.g. Bathroom, Kitchen, Roofing, Deck, Flooring, Painting, Siding, Fencing, General Remodel, etc.).
+If the contractor mentioned pricing, timeline, or materials in the scope notes, include those details in the proposal.
 
 Please provide:
 1. A professional proposal title
 2. The full proposal body with sections for: Scope of Work, Materials/Allowances, Timeline, Pricing/Estimate, and Notes
 3. ${mode === "proposal_email" ? "An email subject line and email body" : "Just the title and body (no email needed)"}
+4. The project type you inferred from the scope notes (a short label like "Deck", "Bathroom", "Roofing", etc.)
 
 Format your response as JSON with these exact keys:
 {
   "title": "...",
   "body": "...",
   "emailSubject": "...",
-  "emailBody": "..."
+  "emailBody": "...",
+  "projectType": "..."
 }
 
 For the email body, include a friendly message mentioning the proposal and that the customer can view it via a link that will be added later. Use [PROPOSAL_LINK] as the placeholder for the link.
@@ -68,10 +68,11 @@ The email should be warm and professional. Sign off generically as "The Contract
   const parsed = JSON.parse(raw);
 
   return {
-    title: parsed.title || `${projectType} Proposal for ${customerName}`,
+    title: parsed.title || `Proposal for ${customerName}`,
     body: parsed.body || "",
-    emailSubject: parsed.emailSubject || `Your ${projectType} Proposal`,
+    emailSubject: parsed.emailSubject || `Your Proposal`,
     emailBody: parsed.emailBody || "",
+    projectType: parsed.projectType || "General",
   };
 }
 

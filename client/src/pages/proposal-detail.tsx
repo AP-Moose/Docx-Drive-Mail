@@ -132,7 +132,7 @@ export default function ProposalDetail() {
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-bold truncate">{proposal.customerName}</h1>
             <p className="text-primary-foreground/75 text-sm">
-              {proposal.projectType} · v{proposal.version} · {format(new Date(proposal.createdAt), "MMM d, yyyy")}
+              {proposal.projectType && proposal.projectType !== "General" ? `${proposal.projectType} · ` : ""}v{proposal.version} · {format(new Date(proposal.createdAt), "MMM d, yyyy")}
             </p>
           </div>
         </div>

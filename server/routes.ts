@@ -79,9 +79,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         proposal.customerName,
         proposal.customerEmail,
         proposal.jobAddress,
-        proposal.projectType,
-        proposal.priceEstimate,
-        proposal.timeline,
         proposal.scopeNotes,
         proposal.mode
       );
@@ -91,6 +88,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         proposalText: generated.body,
         emailSubject: generated.emailSubject,
         emailBody: generated.emailBody,
+        projectType: generated.projectType,
         status: "generated",
       });
 
@@ -205,7 +203,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const { draftId } = await createGmailDraft(
         proposal.customerEmail,
-        proposal.emailSubject || `Your ${proposal.projectType} Proposal`,
+        proposal.emailSubject || "Your Proposal",
         emailBody,
         buffer,
         filename
@@ -255,7 +253,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const emailBody = (proposal.emailBody || "").replace("[PROPOSAL_LINK]", webViewLink);
         const result = await createGmailDraft(
           proposal.customerEmail,
-          proposal.emailSubject || `Your ${proposal.projectType} Proposal`,
+          proposal.emailSubject || "Your Proposal",
           emailBody,
           buffer,
           filename
