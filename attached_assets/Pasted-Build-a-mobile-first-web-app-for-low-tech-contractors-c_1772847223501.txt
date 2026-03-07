@@ -1,0 +1,271 @@
+Build a mobile-first web app for low-tech contractors called “Proposal Builder”.
+
+GOAL
+This app helps a contractor:
+1. enter simple job/customer info
+2. speak or type rough project notes
+3. use AI to generate a professional proposal
+4. optionally generate an email message
+5. save the proposal to Google Drive in an easy-to-find way
+6. create a Gmail draft with:
+   - the generated email text
+   - a Microsoft Word attachment (.docx) of the proposal
+   - a shareable Google Drive link in the email body
+7. support a “proposal only” mode with no email draft creation
+
+IMPORTANT PRODUCT REQUIREMENTS
+- The user is a contractor who is bad with tech.
+- The app must feel extremely simple on phone.
+- Large buttons, clean layout, very few choices per screen.
+- Use a step-by-step wizard that holds the user’s hand.
+- Default to the easiest path.
+- Avoid clutter, advanced controls, or too many settings.
+- Optimize for mobile browser use first.
+- Make it easy to install/use as a web app on a phone.
+- The user should not have to manually manage files/folders if possible.
+
+MAIN MODES
+1. Proposal Only
+   - Generate proposal
+   - Edit proposal
+   - Save to Google Drive
+   - Create Word file (.docx)
+   - Show saved file/link
+   - Do not create Gmail draft
+
+2. Proposal + Email Draft
+   - Generate proposal
+   - Edit proposal
+   - Save to Google Drive
+   - Create Word file (.docx)
+   - Set sharing so “Anyone with the link can view”
+   - Generate email body
+   - Create Gmail draft with:
+     - recipient email populated
+     - subject populated
+     - email body populated
+     - Word document attached
+     - shareable Drive link included in email body
+
+CORE USER FLOW
+Step 1: Home screen
+- Buttons:
+  - New Proposal
+  - Proposal Only
+  - Recent Proposals
+
+Step 2: Customer / job info
+Fields:
+- Customer name (required)
+- Customer email (required only in Proposal + Email mode)
+- Job address
+- Project type dropdown:
+  - Bathroom
+  - Kitchen
+  - Flooring
+  - Painting
+  - Deck
+  - General Remodel
+  - Other
+- Price / estimate amount (optional)
+- Timeline (optional)
+
+Step 3: Scope input
+- Large text area
+- Optional voice input button if simple browser speech-to-text is possible
+- Prompt text should help user:
+  “Describe the work in plain English. Mention what you’re replacing, installing, repairing, materials, allowances, exclusions, and anything the customer asked for.”
+
+Step 4: AI generation
+Generate:
+- proposal title
+- clean professional proposal body
+- optional email draft body
+Use a contractor-friendly tone.
+Proposal should be professional, clean, easy to read, and editable.
+
+Step 5: Review / edit
+- Show proposal in editable form
+- Buttons:
+  - Looks Good
+  - Make Shorter
+  - Make More Detailed
+  - Regenerate
+- Also allow direct text editing
+
+Step 6: Save / draft
+Proposal Only mode:
+- create .docx proposal
+- upload to Google Drive
+- save in easy folder structure
+- show success screen with file name and open link
+
+Proposal + Email Draft mode:
+- create .docx proposal
+- upload to Google Drive
+- create shareable link with “anyone with the link can view”
+- generate email subject and body
+- create Gmail draft with:
+  - To = customer email
+  - Subject = generated subject
+  - Body = generated email text + shareable link
+  - Attachment = .docx proposal
+- show success screen with:
+  - Open Draft
+  - Open Proposal
+  - Copy Link
+
+FILE NAMING AND ORGANIZATION
+Automatically generate an easy-to-find filename using a format like:
+[Customer Name] - [Project Type] - [Job Address or City] - [YYYY-MM-DD] - v1.docx
+
+Examples:
+John Smith - Kitchen - 123 Main St - 2026-03-06 - v1.docx
+
+Google Drive folder structure:
+Proposal Builder / Proposals / [Year] / [Month] / [Customer Name] /
+
+Also save metadata in the app database:
+- id
+- customer name
+- customer email
+- project type
+- address
+- created date
+- updated date
+- version
+- proposal text
+- email body
+- drive file id
+- drive web link
+- gmail draft id
+- mode
+- status
+
+VERSIONING
+If a proposal for the same customer/project/date already exists, create v2, v3, etc.
+Do not overwrite old versions.
+
+RECENT PROPOSALS SCREEN
+Display a mobile-friendly recent list with:
+- customer name
+- project type
+- created date
+- mode
+- buttons:
+  - Open
+  - Duplicate
+  - Create New Version
+  - Open Drive File
+  - Open Gmail Draft if available
+
+GOOGLE INTEGRATIONS
+Implement Google OAuth login.
+Request only the needed scopes for:
+- Google Drive file upload / permissions
+- Gmail draft creation
+Support secure token handling.
+
+GOOGLE DRIVE REQUIREMENTS
+- Upload the generated .docx file to Google Drive
+- Create a shareable link
+- Set file permissions so anyone with the link can view
+- Save the link in the database
+- Put files in the correct folder structure automatically
+- Create missing folders if needed
+
+GMAIL DRAFT REQUIREMENTS
+Create a Gmail draft, not send the email.
+Draft must include:
+- recipient
+- subject
+- generated body text
+- a sentence that includes the shareable proposal link
+- attached .docx proposal
+
+Example email structure:
+Hi [Customer Name],
+
+Attached is your proposal for the [Project Type] project.
+You can also view it here: [shareable link]
+
+Please review it and let me know if you have any questions.
+
+Thank you,
+[Contractor Name or App User]
+
+WORD DOCUMENT REQUIREMENTS
+Generate a real .docx file, not PDF-only.
+Proposal should include sections if enough info is available:
+- Proposal title
+- Customer information
+- Project address
+- Scope of work
+- Materials / allowances
+- Exclusions
+- Timeline
+- Pricing / estimate
+- Notes / next steps
+Use clean formatting with headings and spacing.
+
+AI BEHAVIOR
+Use AI to turn rough contractor notes into a professional proposal.
+Do not make up critical facts if missing.
+If pricing or important details are missing, leave placeholders or note that details should be confirmed.
+Keep language clear and client-facing.
+Tone should feel professional but not overly corporate.
+
+UX REQUIREMENTS
+- Mobile-first responsive layout
+- Big tap targets
+- Minimal text on each screen
+- Progress bar / step indicator
+- Strong success/error messages in plain English
+- Clear buttons:
+  - Back
+  - Next
+  - Save Proposal
+  - Create Draft
+- Avoid overwhelming the user
+- Make the experience feel guided and safe
+
+TECHNICAL REQUIREMENTS
+Choose a practical stack that runs well in Replit.
+Use clear project structure.
+Include:
+- frontend
+- backend/API
+- database/storage for metadata
+- Google OAuth integration
+- Drive API integration
+- Gmail API integration
+- docx generation
+- AI generation layer
+
+Please scaffold and implement the full MVP.
+Include environment variable setup instructions for:
+- Google OAuth credentials
+- Drive/Gmail API config
+- AI API key
+- app base URL
+- session secret
+
+DELIVERABLES
+1. working app
+2. clean codebase
+3. setup instructions
+4. comments in important areas
+5. sample seed/demo data if helpful
+6. error handling for failed Drive upload, failed Gmail draft creation, and missing required fields
+
+IMPORTANT IMPLEMENTATION NOTE
+Prioritize a working end-to-end MVP over fancy styling.
+The most important thing is:
+input -> AI proposal -> .docx -> Drive upload/link sharing -> Gmail draft with attachment and link.
+
+After building the MVP, also include a short README with:
+- how to run it
+- how Google auth is configured
+- how file naming/versioning works
+- where to customize the proposal template
+- where to customize the email template
