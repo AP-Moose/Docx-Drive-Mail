@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -21,20 +21,22 @@ import {
   Mic,
   MicOff,
   CheckCircle2,
-  RotateCcw,
   Scissors,
   AlignLeft,
+  RotateCcw,
   Upload,
   Mail,
   ExternalLink,
   Copy,
   FileDown,
   HardHat,
+  Send,
+  MessageSquare,
 } from "lucide-react";
 import { PROJECT_TYPES } from "@shared/schema";
 import type { Proposal } from "@shared/schema";
 
-type Step = "info" | "scope" | "generating" | "review" | "saving" | "done";
+type Step = "info" | "scope" | "generating" | "review" | "confirm" | "saving" | "done";
 
 interface FormData {
   customerName: string;
@@ -48,11 +50,11 @@ interface FormData {
 }
 
 function ProgressBar({ step }: { step: Step }) {
-  const steps: Step[] = ["info", "scope", "generating", "review", "saving", "done"];
-  const current = steps.indexOf(step);
-  const total = 4; // info, scope, review, done
-  const displaySteps = ["info", "scope", "review", "done"];
-  const displayIndex = Math.min(displaySteps.indexOf(step as any), 3);
+  const displaySteps = ["info", "scope", "review", "confirm", "done"];
+  const total = displaySteps.length;
+  let displayIndex = displaySteps.indexOf(step as any);
+  if (step === "generating") displayIndex = 2;
+  if (step === "saving") displayIndex = 3;
   const progress = ((Math.max(displayIndex, 0) + 1) / total) * 100;
 
   return (
@@ -65,14 +67,15 @@ function ProgressBar({ step }: { step: Step }) {
   );
 }
 
-function StepLabel({ step }: { step: Step }) {
+function StepLabel({ step, mode }: { step: Step; mode: string }) {
   const labels: Record<Step, string> = {
-    info: "Step 1 of 4 — Job Info",
-    scope: "Step 2 of 4 — Describe the Work",
+    info: "Step 1 of 5 — Job Info",
+    scope: "Step 2 of 5 — Describe the Work",
     generating: "Generating your proposal…",
-    review: "Step 3 of 4 — Review",
+    review: "Step 3 of 5 — Review & Edit",
+    confirm: mode === "proposal_email" ? "Step 4 of 5 — Review Email & Send" : "Step 4 of 5 — Confirm & Upload",
     saving: "Saving…",
-    done: "Step 4 of 4 — Done!",
+    done: "Step 5 of 5 — Done!",
   };
   return <p className="text-sm text-muted-foreground mt-2">{labels[step]}</p>;
 }
@@ -89,8 +92,12 @@ export default function NewProposal() {
   const [proposalId, setProposalId] = useState<number | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [editedText, setEditedText] = useState("");
+  const [editedEmailSubject, setEditedEmailSubject] = useState("");
+  const [editedEmailBody, setEditedEmailBody] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [recognition, setRecognition] = useState<any>(null);
+  const [chatInput, setChatInput] = useState("");
+  const chatInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState<FormData>({
     customerName: "",
@@ -103,7 +110,6 @@ export default function NewProposal() {
     mode: initialMode,
   });
 
-  // Voice input setup
   useEffect(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -140,7 +146,6 @@ export default function NewProposal() {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  // Create proposal record
   const createMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/proposals", {
@@ -165,7 +170,6 @@ export default function NewProposal() {
     },
   });
 
-  // Generate AI text
   const generateMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await apiRequest("POST", `/api/proposals/${id}/generate`);
@@ -174,6 +178,8 @@ export default function NewProposal() {
     onSuccess: (p) => {
       setProposal(p);
       setEditedText(p.proposalText || "");
+      setEditedEmailSubject(p.emailSubject || "");
+      setEditedEmailBody(p.emailBody || "");
       setStep("review");
     },
     onError: (e: any) => {
@@ -182,21 +188,20 @@ export default function NewProposal() {
     },
   });
 
-  // Save text edits
   const saveMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("PATCH", `/api/proposals/${proposalId}`, {
         proposalText: editedText,
+        emailSubject: editedEmailSubject,
+        emailBody: editedEmailBody,
       });
       return res.json() as Promise<Proposal>;
     },
     onSuccess: (p) => setProposal(p),
   });
 
-  // Refine proposal
   const refineMutation = useMutation({
-    mutationFn: async (instruction: "shorter" | "longer" | "regenerate") => {
-      // Save current edits first
+    mutationFn: async (instruction: string) => {
       await apiRequest("PATCH", `/api/proposals/${proposalId}`, { proposalText: editedText });
       const res = await apiRequest("POST", `/api/proposals/${proposalId}/refine`, { instruction });
       return res.json() as Promise<Proposal>;
@@ -204,17 +209,20 @@ export default function NewProposal() {
     onSuccess: (p) => {
       setProposal(p);
       setEditedText(p.proposalText || "");
+      setChatInput("");
     },
     onError: (e: any) => {
       toast({ title: "Refinement failed", description: e.message, variant: "destructive" });
     },
   });
 
-  // Finalize: Drive upload + Gmail draft
   const finalizeMutation = useMutation({
     mutationFn: async () => {
-      // Save latest text edits first
-      await apiRequest("PATCH", `/api/proposals/${proposalId}`, { proposalText: editedText });
+      await apiRequest("PATCH", `/api/proposals/${proposalId}`, {
+        proposalText: editedText,
+        emailSubject: editedEmailSubject,
+        emailBody: editedEmailBody,
+      });
       const res = await apiRequest("POST", `/api/proposals/${proposalId}/finalize`);
       return res.json() as Promise<{ fileId: string; webViewLink: string; gmailDraftId?: string; proposal: Proposal }>;
     },
@@ -228,15 +236,21 @@ export default function NewProposal() {
       if (code === "DRIVE_NOT_CONNECTED" || code === "GMAIL_NOT_CONNECTED") {
         toast({
           title: "Google not connected",
-          description: "Please connect your Google account first. Check the setup instructions.",
+          description: "Please connect your Google account first.",
           variant: "destructive",
         });
       } else {
         toast({ title: "Save failed", description: e.message, variant: "destructive" });
       }
-      setStep("review");
+      setStep("confirm");
     },
   });
+
+  function handleChatSubmit() {
+    const msg = chatInput.trim();
+    if (!msg) return;
+    refineMutation.mutate(msg);
+  }
 
   function handleNext() {
     if (step === "info") {
@@ -260,6 +274,9 @@ export default function NewProposal() {
       }
       createMutation.mutate();
     } else if (step === "review") {
+      saveMutation.mutate();
+      setStep("confirm");
+    } else if (step === "confirm") {
       setStep("saving");
       finalizeMutation.mutate();
     }
@@ -280,7 +297,6 @@ export default function NewProposal() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-2xl mx-auto">
-      {/* Header */}
       <div className="bg-primary px-5 pt-10 pb-5 text-primary-foreground">
         <div className="flex items-center gap-3 mb-3">
           {step !== "done" && (
@@ -296,10 +312,9 @@ export default function NewProposal() {
           </div>
         </div>
         <ProgressBar step={step} />
-        <StepLabel step={step} />
+        <StepLabel step={step} mode={form.mode} />
       </div>
 
-      {/* Step Content */}
       <div className="flex-1 px-5 py-6">
 
         {/* ── Step 1: Info ─────────────────────────────── */}
@@ -453,7 +468,7 @@ export default function NewProposal() {
           </div>
         )}
 
-        {/* ── Step 3: Review ──────────────────────────── */}
+        {/* ── Step 3: Review & Edit ──────────────────── */}
         {step === "review" && proposal && (
           <div className="space-y-5">
             <div>
@@ -470,10 +485,9 @@ export default function NewProposal() {
               onChange={(e) => setEditedText(e.target.value)}
             />
 
-            {/* Refine buttons */}
             <div>
               <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">
-                Adjust proposal:
+                Quick adjustments:
               </p>
               <div className="grid grid-cols-3 gap-2">
                 <Button
@@ -510,13 +524,122 @@ export default function NewProposal() {
                   Redo
                 </Button>
               </div>
+            </div>
+
+            <div>
+              <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">
+                Tell AI what to change:
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  ref={chatInputRef}
+                  data-testid="input-chat-refine"
+                  className="flex-1 h-11 text-sm"
+                  placeholder='e.g. "Add a warranty section" or "Change price to $10,000"'
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleChatSubmit();
+                    }
+                  }}
+                  disabled={refineMutation.isPending}
+                />
+                <Button
+                  data-testid="button-chat-send"
+                  size="icon"
+                  className="h-11 w-11 shrink-0"
+                  onClick={handleChatSubmit}
+                  disabled={refineMutation.isPending || !chatInput.trim()}
+                >
+                  {refineMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <MessageSquare className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
               {refineMutation.isPending && (
                 <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Rewriting…
+                  Updating proposal…
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ── Step 4: Confirm ─────────────────────────── */}
+        {step === "confirm" && proposal && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-lg font-bold">Review Before Sending</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                {form.mode === "proposal_email"
+                  ? "Review your proposal and email below. Edit anything, then hit send."
+                  : "Review your proposal below, then upload to Google Drive."}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                Proposal Preview
+              </Label>
+              <div
+                data-testid="preview-proposal-text"
+                className="bg-muted/50 border border-border rounded-xl p-4 max-h-[200px] overflow-y-auto text-sm font-mono whitespace-pre-wrap leading-relaxed"
+              >
+                {editedText}
+              </div>
+              <button
+                data-testid="button-edit-proposal"
+                className="text-xs text-primary font-medium"
+                onClick={() => setStep("review")}
+              >
+                Go back and edit proposal
+              </button>
+            </div>
+
+            {form.mode === "proposal_email" && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="emailSubject" className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                    Email Subject
+                  </Label>
+                  <Input
+                    id="emailSubject"
+                    data-testid="input-email-subject"
+                    className="h-11 text-sm"
+                    value={editedEmailSubject}
+                    onChange={(e) => setEditedEmailSubject(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="emailBody" className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                    Email Body
+                  </Label>
+                  <Textarea
+                    id="emailBody"
+                    data-testid="textarea-email-body"
+                    className="text-sm min-h-[160px] resize-none leading-relaxed"
+                    value={editedEmailBody}
+                    onChange={(e) => setEditedEmailBody(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    [PROPOSAL_LINK] will be replaced with the Google Drive link automatically.
+                  </p>
+                </div>
+
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-3">
+                  <p className="text-sm text-amber-800 dark:text-amber-300 font-medium flex items-center gap-2">
+                    <Mail className="w-4 h-4 shrink-0" />
+                    This will send the email directly to {form.customerEmail}
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -624,7 +747,7 @@ export default function NewProposal() {
       </div>
 
       {/* Bottom nav */}
-      {(step === "info" || step === "scope" || step === "review") && (
+      {(step === "info" || step === "scope" || step === "review" || step === "confirm") && (
         <div className="px-5 pb-8 pt-4 border-t border-border flex gap-3">
           {step !== "info" && (
             <Button
@@ -634,6 +757,7 @@ export default function NewProposal() {
               onClick={() => {
                 if (step === "scope") setStep("info");
                 else if (step === "review") setStep("scope");
+                else if (step === "confirm") setStep("review");
               }}
               disabled={isLoading}
             >
@@ -649,10 +773,22 @@ export default function NewProposal() {
           >
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
+            ) : step === "confirm" ? (
+              form.mode === "proposal_email" ? (
+                <>
+                  <Send className="w-4 h-4 mr-1" />
+                  Upload & Send Email
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4 mr-1" />
+                  Upload to Drive
+                </>
+              )
             ) : step === "review" ? (
               <>
-                <Upload className="w-4 h-4 mr-1" />
-                Save & Finalize
+                {form.mode === "proposal_email" ? "Review Email & Send" : "Confirm & Upload"}
+                <ArrowRight className="w-4 h-4 ml-1" />
               </>
             ) : (
               <>

@@ -106,7 +106,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const proposal = await storage.getProposal(Number(req.params.id));
       if (!proposal) return res.status(404).json({ error: "Not found" });
 
-      const { instruction } = req.body as { instruction: "shorter" | "longer" | "regenerate" };
+      const { instruction } = req.body as { instruction: string };
       const result = await refineProposal(
         proposal.proposalText || "",
         instruction,

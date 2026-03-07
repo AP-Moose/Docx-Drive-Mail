@@ -77,14 +77,16 @@ The email should be warm and professional. Sign off generically as "The Contract
 
 export async function refineProposal(
   currentText: string,
-  instruction: "shorter" | "longer" | "regenerate",
+  instruction: string,
   originalData: Partial<Proposal>
 ): Promise<{ body: string }> {
-  const instructionMap = {
+  const shortcutMap: Record<string, string> = {
     shorter: "Make this proposal more concise. Keep all key facts but remove unnecessary filler.",
     longer: "Expand this proposal with more detail. Add more specifics about the scope, materials, and process.",
     regenerate: "Rewrite this proposal from scratch using the same facts, but with fresh wording.",
   };
+
+  const resolvedInstruction = shortcutMap[instruction] || instruction;
 
   const response = await openai.chat.completions.create({
     model: "gpt-5.1",
@@ -92,11 +94,11 @@ export async function refineProposal(
       {
         role: "system",
         content:
-          "You are a professional contractor proposal writer. Revise the following proposal as instructed.",
+          "You are a professional contractor proposal writer. Revise the following proposal as instructed. Return only the revised proposal body text, no JSON wrapper, no markdown fences.",
       },
       {
         role: "user",
-        content: `${instructionMap[instruction]}\n\nCurrent proposal:\n${currentText}\n\nReturn only the revised proposal body text, no JSON wrapper.`,
+        content: `Instruction: ${resolvedInstruction}\n\nCurrent proposal:\n${currentText}\n\nReturn only the revised proposal body text.`,
       },
     ],
   });
