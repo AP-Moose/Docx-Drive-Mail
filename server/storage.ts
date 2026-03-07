@@ -1,38 +1,60 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { db } from "./db";
+import { proposals, type Proposal, type InsertProposal } from "@shared/schema";
+import { eq, desc, and } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getProposal(id: number): Promise<Proposal | undefined>;
+  getAllProposals(): Promise<Proposal[]>;
+  createProposal(data: InsertProposal): Promise<Proposal>;
+  updateProposal(id: number, data: Partial<Proposal>): Promise<Proposal>;
+  deleteProposal(id: number): Promise<void>;
+  getNextVersion(customerName: string, projectType: string): Promise<number>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async getProposal(id: number): Promise<Proposal | undefined> {
+    const [row] = await db.select().from(proposals).where(eq(proposals.id, id));
+    return row;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getAllProposals(): Promise<Proposal[]> {
+    return db.select().from(proposals).orderBy(desc(proposals.createdAt));
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async createProposal(data: InsertProposal): Promise<Proposal> {
+    const version = await this.getNextVersion(data.customerName, data.projectType);
+    const [row] = await db
+      .insert(proposals)
+      .values({ ...data, version })
+      .returning();
+    return row;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async updateProposal(id: number, data: Partial<Proposal>): Promise<Proposal> {
+    const [row] = await db
+      .update(proposals)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(proposals.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteProposal(id: number): Promise<void> {
+    await db.delete(proposals).where(eq(proposals.id, id));
+  }
+
+  async getNextVersion(customerName: string, projectType: string): Promise<number> {
+    const today = new Date().toISOString().split("T")[0];
+    const existing = await db
+      .select()
+      .from(proposals)
+      .where(
+        and(eq(proposals.customerName, customerName), eq(proposals.projectType, projectType))
+      )
+      .orderBy(desc(proposals.version));
+    if (existing.length === 0) return 1;
+    return (existing[0].version || 0) + 1;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
