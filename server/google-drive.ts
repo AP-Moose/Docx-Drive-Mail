@@ -23,6 +23,20 @@ export async function testDriveConnection(): Promise<boolean> {
   }
 }
 
+export async function getDriveUserEmail(): Promise<string | null> {
+  try {
+    if (!isDriveConnected()) return null;
+    const connectors = getConnectors();
+    const resp = await connectors.proxy("google-drive", "/drive/v3/about?fields=user(emailAddress)", {
+      method: "GET",
+    });
+    const data = await resp.json() as any;
+    return data.user?.emailAddress || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Build a fresh connectors client — never cache, tokens expire */
 function getConnectors() {
   return new ReplitConnectors();

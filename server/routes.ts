@@ -3,8 +3,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateProposal, refineProposal } from "./ai";
 import { generateDocx } from "./docx-generator";
-import { uploadToDrive, setFilePublic, isDriveConnected, testDriveConnection } from "./google-drive";
-import { createGmailDraft, isGmailConnected, testGmailConnection } from "./google-mail";
+import { uploadToDrive, setFilePublic, isDriveConnected, testDriveConnection, getDriveUserEmail } from "./google-drive";
+import { createGmailDraft, isGmailConnected, testGmailConnection, getGmailUserEmail } from "./google-mail";
 import { z } from "zod";
 import { insertProposalSchema } from "@shared/schema";
 
@@ -19,13 +19,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/settings/status", async (_req: Request, res: Response) => {
     try {
-      const [driveOk, gmailOk] = await Promise.all([
+      const [driveOk, gmailOk, driveEmail, gmailEmail] = await Promise.all([
         testDriveConnection(),
         testGmailConnection(),
+        getDriveUserEmail(),
+        getGmailUserEmail(),
       ]);
       res.json({
-        drive: { connected: driveOk },
-        gmail: { connected: gmailOk },
+        drive: { connected: driveOk, email: driveEmail || undefined },
+        gmail: { connected: gmailOk, email: gmailEmail || undefined },
       });
     } catch (e) {
       res.json({

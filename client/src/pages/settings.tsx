@@ -4,8 +4,8 @@ import { ArrowLeft, HardHat, CheckCircle2, XCircle, Loader2, HardDrive, Mail, Re
 import { Button } from "@/components/ui/button";
 
 interface ConnectionStatus {
-  drive: { connected: boolean };
-  gmail: { connected: boolean };
+  drive: { connected: boolean; email?: string };
+  gmail: { connected: boolean; email?: string };
 }
 
 export default function Settings() {
@@ -62,7 +62,11 @@ export default function Settings() {
                 <div className="flex-1">
                   <p className="font-medium">Google Drive</p>
                   <p className="text-sm text-muted-foreground">
-                    {data.drive.connected ? "Connected — proposals will upload to Drive" : "Not connected"}
+                    {data.drive.connected 
+                      ? data.drive.email 
+                        ? `Connected as ${data.drive.email}`
+                        : "Connected — proposals will upload to Drive"
+                      : "Not connected"}
                   </p>
                 </div>
                 {data.drive.connected ? (
@@ -82,7 +86,11 @@ export default function Settings() {
                 <div className="flex-1">
                   <p className="font-medium">Gmail</p>
                   <p className="text-sm text-muted-foreground">
-                    {data.gmail.connected ? "Connected — proposals will be emailed" : "Not connected"}
+                    {data.gmail.connected 
+                      ? data.gmail.email 
+                        ? `Connected as ${data.gmail.email}`
+                        : "Connected — proposals will be emailed"
+                      : "Not connected"}
                   </p>
                 </div>
                 {data.gmail.connected ? (

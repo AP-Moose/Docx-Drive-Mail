@@ -72,6 +72,16 @@ export async function testGmailConnection(): Promise<boolean> {
   }
 }
 
+export async function getGmailUserEmail(): Promise<string | null> {
+  try {
+    const gmail = await getUncachableGmailClient();
+    const profile = await gmail.users.getProfile({ userId: "me" });
+    return profile.data.emailAddress || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Encode to base64url for Gmail raw message */
 function toBase64Url(buf: Buffer): string {
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
