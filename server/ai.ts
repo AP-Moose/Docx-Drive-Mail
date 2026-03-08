@@ -21,7 +21,7 @@ export async function generateProposal(
   scopeNotes: string,
   mode: string
 ): Promise<GeneratedProposal> {
-  const systemPrompt = `You are a professional contractor proposal writer. 
+  const systemPrompt = `You are a professional contractor proposal writer.
 You write clear, professional proposals that are easy for homeowners to understand.
 Tone: professional but not corporate, friendly and confident.
 Do NOT invent facts not provided. Use [TBD] for missing critical details.`;
@@ -37,9 +37,42 @@ ${scopeNotes}
 Based on the scope notes, determine the project type (e.g. Bathroom, Kitchen, Roofing, Deck, Flooring, Painting, Siding, Fencing, General Remodel, etc.).
 If the contractor mentioned pricing, timeline, or materials in the scope notes, include those details in the proposal.
 
+Use this EXACT section structure for the proposal body (use ALL CAPS headings):
+
+PROJECT SCOPE
+- List each work item as a bullet point (use "- " prefix)
+- Be specific about what is being removed, installed, replaced
+- Include materials if mentioned
+
+TOTAL INVESTMENT
+State the price as a flat rate or estimate range
+Include a line about what the price covers (labor, materials, cleanup, etc.)
+
+DEPOSIT SCHEDULE
+Break the total into payment milestones (typically thirds):
+- One-third due upon contract signing
+- One-third due on the first day of on-site work
+- Final one-third due upon project completion
+Calculate the actual dollar amounts
+
+PROJECT DETAILS
+- Estimated timeline
+- Material selection notes
+- Exclusions (permits, structural, etc.)
+- Any other relevant notes
+
+ACCEPTANCE OF PROPOSAL
+By signing below, you agree to the scope of work and payment terms outlined above.
+
+Client Name (Printed): __________________________________________
+
+Client Signature: ________________________________________________
+
+Date: _______________________
+
 Please provide:
-1. A professional proposal title
-2. The full proposal body with sections for: Scope of Work, Materials/Allowances, Timeline, Pricing/Estimate, and Notes
+1. A professional proposal title (format: "[Project Type] Proposal" followed by the job address on a new line, e.g. "BATHROOM RENOVATION PROPOSAL\\n5200 Hilltop Dr, Brookhaven")
+2. The full proposal body following the exact section structure above
 3. ${mode === "proposal_email" ? "An email subject line and email body" : "Just the title and body (no email needed)"}
 4. The project type you inferred from the scope notes (a short label like "Deck", "Bathroom", "Roofing", etc.)
 
@@ -82,9 +115,9 @@ export async function refineProposal(
   originalData: Partial<Proposal>
 ): Promise<{ body: string }> {
   const shortcutMap: Record<string, string> = {
-    shorter: "Make this proposal more concise. Keep all key facts but remove unnecessary filler.",
-    longer: "Expand this proposal with more detail. Add more specifics about the scope, materials, and process.",
-    regenerate: "Rewrite this proposal from scratch using the same facts, but with fresh wording.",
+    shorter: "Make this proposal more concise. Keep all key facts but remove unnecessary filler. Keep the same section structure (PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, ACCEPTANCE OF PROPOSAL).",
+    longer: "Expand this proposal with more detail. Add more specifics about the scope, materials, and process. Keep the same section structure.",
+    regenerate: "Rewrite this proposal from scratch using the same facts, but with fresh wording. Keep the same section structure (PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, ACCEPTANCE OF PROPOSAL).",
   };
 
   const resolvedInstruction = shortcutMap[instruction] || instruction;
@@ -95,7 +128,7 @@ export async function refineProposal(
       {
         role: "system",
         content:
-          "You are a professional contractor proposal writer. Revise the following proposal as instructed. Return only the revised proposal body text, no JSON wrapper, no markdown fences.",
+          "You are a professional contractor proposal writer. Revise the following proposal as instructed. Return only the revised proposal body text, no JSON wrapper, no markdown fences. Maintain the section structure with ALL CAPS headings (PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, ACCEPTANCE OF PROPOSAL).",
       },
       {
         role: "user",

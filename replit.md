@@ -8,6 +8,7 @@ Mobile-first web app for contractors to create professional proposals, upload to
 - **Backend**: Express (TypeScript) on port 5000
 - **Database**: PostgreSQL via Drizzle ORM
 - **AI**: OpenAI (gpt-5.1) via Replit AI Integrations
+- **Branding**: Green theme matching Inspiring Services logo (HSL 134 76% 38%)
 - **Google Drive**: Replit Connectors SDK (`@replit/connectors-sdk` proxy pattern)
 - **Gmail**: googleapis + Replit Connectors (gmail.send scope — sends directly, no draft creation)
 
@@ -23,7 +24,7 @@ Mobile-first web app for contractors to create professional proposals, upload to
 
 - `shared/schema.ts` — Drizzle schema, types, insert schemas
 - `server/routes.ts` — API routes (CRUD, generate, refine, finalize, docx, drive-upload, gmail-send)
-- `server/ai.ts` — OpenAI proposal generation (infers project type from scope) and refinement
+- `server/ai.ts` — OpenAI proposal generation (infers project type; outputs structured format: PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, ACCEPTANCE OF PROPOSAL)
 - `server/docx-generator.ts` — .docx generation via `docx` package
 - `server/google-drive.ts` — Drive upload with folder hierarchy + public permission
 - `server/google-mail.ts` — Gmail send via `users.messages.send` (gmail.send scope, supports multiple To: recipients)

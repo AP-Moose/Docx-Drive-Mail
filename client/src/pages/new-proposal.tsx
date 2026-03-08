@@ -714,7 +714,7 @@ export default function NewProposal() {
                   data-testid="link-drive"
                   className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4 active:bg-muted transition-colors"
                 >
-                  <ExternalLink className="w-5 h-5 text-blue-600" />
+                  <ExternalLink className="w-5 h-5 text-green-600" />
                   <span className="font-medium flex-1">Open in Google Drive</span>
                   <ArrowRight className="w-4 h-4 text-muted-foreground" />
                 </a>

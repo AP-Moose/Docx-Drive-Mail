@@ -251,7 +251,7 @@ export default function ProposalDetail() {
                 data-testid="link-drive"
                 className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4"
               >
-                <ExternalLink className="w-5 h-5 text-blue-600" />
+                <ExternalLink className="w-5 h-5 text-green-600" />
                 <span className="font-medium">Open in Google Drive</span>
               </a>
             )}

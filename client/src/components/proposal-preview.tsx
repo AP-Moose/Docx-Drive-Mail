@@ -111,7 +111,7 @@ export default function ProposalPreview({
         .proposal-preview-title {
           font-size: 20px;
           font-weight: 700;
-          color: #1a3a6b;
+          color: #0f490e;
           text-align: center;
           margin-bottom: 4px;
         }
@@ -123,13 +123,13 @@ export default function ProposalPreview({
         }
         .proposal-preview-divider {
           border: none;
-          border-top: 2px solid #2563eb;
+          border-top: 2px solid #15a32a;
           margin: 16px 0;
         }
         .proposal-preview-prepared {
           font-size: 14px;
           font-weight: 700;
-          color: #2563eb;
+          color: #15a32a;
           text-transform: uppercase;
           letter-spacing: 0.05em;
           margin-bottom: 8px;
@@ -147,7 +147,7 @@ export default function ProposalPreview({
         .proposal-heading {
           font-size: 15px;
           font-weight: 700;
-          color: #2563eb;
+          color: #15a32a;
           text-transform: uppercase;
           letter-spacing: 0.03em;
           margin-top: 20px;
@@ -177,7 +177,7 @@ export default function ProposalPreview({
           content: "•";
           position: absolute;
           left: 4px;
-          color: #2563eb;
+          color: #15a32a;
           font-weight: bold;
         }
         .proposal-bullet-nested {

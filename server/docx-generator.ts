@@ -25,14 +25,6 @@ function buildFilename(proposal: Proposal): string {
 }
 
 function parseProposalSections(body: string): { heading: string; content: string }[] {
-  // Try to split on numbered or titled sections
-  const sectionPatterns = [
-    /^(\d+\.\s+[A-Z][A-Z\s\/]+)[:]*\s*$/m,
-    /^([A-Z][A-Z\s\/]+):$/m,
-    /^\*\*([^*]+)\*\*$/m,
-  ];
-
-  // Simple line-by-line parsing
   const lines = body.split("\n");
   const sections: { heading: string; content: string }[] = [];
   let current: { heading: string; content: string[] } | null = null;
@@ -44,7 +36,6 @@ function parseProposalSections(body: string): { heading: string; content: string
       continue;
     }
 
-    // Check if line looks like a heading (all-caps, or starts with number, or ends with colon)
     const isHeading =
       /^[\d]+[\.\)]\s+[A-Z]/.test(trimmed) ||
       /^[A-Z][A-Z\s\/&]+:?$/.test(trimmed) ||
@@ -82,7 +73,6 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
   });
 
   const docChildren: any[] = [
-    // Title
     new Paragraph({
       text: proposal.proposalTitle || "Proposal",
       heading: HeadingLevel.TITLE,
@@ -90,7 +80,6 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
       spacing: { after: 200 },
     }),
 
-    // Date line
     new Paragraph({
       children: [
         new TextRun({ text: `Date: ${today}`, color: "666666", size: 20 }),
@@ -99,13 +88,11 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
       spacing: { after: 400 },
     }),
 
-    // Divider
     new Paragraph({
-      border: { bottom: { color: "2563EB", size: 6, style: BorderStyle.SINGLE } },
+      border: { bottom: { color: "15A32A", size: 6, style: BorderStyle.SINGLE } },
       spacing: { after: 300 },
     }),
 
-    // Customer Info section
     new Paragraph({
       text: "PREPARED FOR",
       heading: HeadingLevel.HEADING_2,
@@ -141,7 +128,6 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
     new Paragraph({ text: "", spacing: { after: 200 } })
   );
 
-  // If we have parsed sections, add them properly
   if (sections.length > 0) {
     for (const section of sections) {
       if (section.heading) {
@@ -154,7 +140,6 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
         );
       }
 
-      // Add content lines
       const contentLines = section.content.split("\n");
       for (const line of contentLines) {
         const trimmed = line.trim();
@@ -163,7 +148,6 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
           continue;
         }
 
-        // Check if bullet-like
         if (trimmed.startsWith("- ") || trimmed.startsWith("• ") || trimmed.startsWith("* ")) {
           docChildren.push(
             new Paragraph({
@@ -183,7 +167,6 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
       }
     }
   } else {
-    // Fallback: just dump the text
     const lines = (proposal.proposalText || "").split("\n");
     for (const line of lines) {
       docChildren.push(
@@ -195,7 +178,6 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
     }
   }
 
-  // Footer separator
   docChildren.push(
     new Paragraph({
       border: { top: { color: "CCCCCC", size: 4, style: BorderStyle.SINGLE } },
@@ -234,10 +216,10 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
           run: { font: "Calibri", size: 22, color: "1A1A1A" },
         },
         heading1: {
-          run: { font: "Calibri", size: 32, bold: true, color: "1A3A6B" },
+          run: { font: "Calibri", size: 32, bold: true, color: "0F490E" },
         },
         heading2: {
-          run: { font: "Calibri", size: 24, bold: true, color: "2563EB" },
+          run: { font: "Calibri", size: 24, bold: true, color: "15A32A" },
         },
       },
     },
