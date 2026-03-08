@@ -238,14 +238,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const emailBody = (proposal.emailBody || "")
         .replace("[PROPOSAL_LINK]", proposal.driveWebLink);
 
-      const { buffer, filename } = await generateDocx(proposal);
-
       const { draftId } = await createGmailDraft(
         proposal.customerEmail,
         proposal.emailSubject || "Your Proposal",
-        emailBody,
-        buffer,
-        filename
+        emailBody
       );
 
       const updated = await storage.updateProposal(proposal.id, {
@@ -296,9 +292,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const result = await createGmailDraft(
           proposal.customerEmail,
           proposal.emailSubject || "Your Proposal",
-          emailBody,
-          buffer,
-          filename
+          emailBody
         );
         gmailDraftId = result.draftId;
       }

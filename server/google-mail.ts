@@ -91,38 +91,20 @@ function toBase64Url(buf: Buffer): string {
 }
 
 /**
- * Build a MIME multipart/mixed message with plain text body and .docx attachment.
+ * Build a plain-text MIME message (no attachment — Drive link is in the body).
  */
 function buildMimeMessage(
   to: string,
   subject: string,
-  bodyText: string,
-  attachmentBuffer: Buffer,
-  attachmentFilename: string
+  bodyText: string
 ): string {
-  const boundary = `proposal_builder_${Date.now()}`;
-  const safeName = attachmentFilename.replace(/"/g, "'");
-  const attachmentB64 = attachmentBuffer.toString("base64").match(/.{1,76}/g)?.join("\r\n") || "";
-
   const raw = [
     `MIME-Version: 1.0`,
     `To: ${to}`,
     `Subject: ${subject}`,
-    `Content-Type: multipart/mixed; boundary="${boundary}"`,
-    ``,
-    `--${boundary}`,
     `Content-Type: text/plain; charset="UTF-8"`,
     ``,
     bodyText,
-    ``,
-    `--${boundary}`,
-    `Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document`,
-    `Content-Disposition: attachment; filename="${safeName}"`,
-    `Content-Transfer-Encoding: base64`,
-    ``,
-    attachmentB64,
-    ``,
-    `--${boundary}--`,
   ].join("\r\n");
 
   return toBase64Url(Buffer.from(raw));
@@ -136,14 +118,12 @@ function buildMimeMessage(
 export async function createGmailDraft(
   to: string,
   subject: string,
-  bodyText: string,
-  attachmentBuffer: Buffer,
-  attachmentFilename: string
+  bodyText: string
 ): Promise<{ draftId: string }> {
   if (!isGmailConnected()) throw new Error("GMAIL_NOT_CONNECTED");
 
   const gmail = await getUncachableGmailClient();
-  const raw = buildMimeMessage(to, subject, bodyText, attachmentBuffer, attachmentFilename);
+  const raw = buildMimeMessage(to, subject, bodyText);
 
   // Use messages.send — supported by gmail.send scope
   const response = await gmail.users.messages.send({
