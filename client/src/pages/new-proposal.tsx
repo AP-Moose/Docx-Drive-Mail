@@ -90,6 +90,8 @@ export default function NewProposal() {
   const [editedEmailBody, setEditedEmailBody] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [recognition, setRecognition] = useState<any>(null);
+  const [isChatListening, setIsChatListening] = useState(false);
+  const [chatRecognition, setChatRecognition] = useState<any>(null);
   const [chatInput, setChatInput] = useState("");
   const chatInputRef = useRef<HTMLInputElement>(null);
   const [previewMode, setPreviewMode] = useState(false);
@@ -119,6 +121,18 @@ export default function NewProposal() {
       };
       rec.onend = () => setIsListening(false);
       setRecognition(rec);
+
+      const chatRec = new SpeechRecognition();
+      chatRec.continuous = true;
+      chatRec.interimResults = true;
+      chatRec.onresult = (e: any) => {
+        const transcript = Array.from(e.results)
+          .map((r: any) => r[0].transcript)
+          .join(" ");
+        setChatInput(transcript);
+      };
+      chatRec.onend = () => setIsChatListening(false);
+      setChatRecognition(chatRec);
     }
   }, []);
 
@@ -133,6 +147,20 @@ export default function NewProposal() {
     } else {
       recognition.start();
       setIsListening(true);
+    }
+  }
+
+  function toggleChatVoice() {
+    if (!chatRecognition) {
+      toast({ title: "Voice not supported", description: "Use typing instead", variant: "destructive" });
+      return;
+    }
+    if (isChatListening) {
+      chatRecognition.stop();
+      setIsChatListening(false);
+    } else {
+      chatRecognition.start();
+      setIsChatListening(true);
     }
   }
 
@@ -588,7 +616,7 @@ export default function NewProposal() {
                   ref={chatInputRef}
                   data-testid="input-chat-refine"
                   className="flex-1 h-10 text-sm"
-                  placeholder='e.g. "Add a warranty section" or "Change price to $10,000"'
+                  placeholder={isChatListening ? "Listening…" : 'e.g. "Change price to $10,000"'}
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -596,6 +624,22 @@ export default function NewProposal() {
                   }}
                   disabled={refineMutation.isPending}
                 />
+                {chatRecognition && (
+                  <Button
+                    data-testid="button-chat-voice"
+                    variant={isChatListening ? "destructive" : "secondary"}
+                    size="sm"
+                    className="h-10 px-3"
+                    onClick={toggleChatVoice}
+                    disabled={refineMutation.isPending}
+                  >
+                    {isChatListening ? (
+                      <MicOff className="w-4 h-4" />
+                    ) : (
+                      <Mic className="w-4 h-4" />
+                    )}
+                  </Button>
+                )}
                 <Button
                   data-testid="button-chat-send"
                   size="sm"
@@ -606,10 +650,16 @@ export default function NewProposal() {
                   {refineMutation.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    <MessageSquare className="w-4 h-4" />
+                    <Send className="w-4 h-4" />
                   )}
                 </Button>
               </div>
+              {isChatListening && (
+                <p className="text-sm text-primary mt-2 flex items-center gap-2 animate-pulse">
+                  <Mic className="w-3.5 h-3.5" />
+                  Listening — tap mic to stop, then send
+                </p>
+              )}
               {refineMutation.isPending && (
                 <p className="text-sm text-muted-foreground mt-2 flex items-center gap-2">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />

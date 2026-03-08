@@ -250,7 +250,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       let gmailDraftId: string | undefined;
 
       if (proposal.mode === "proposal_email" && proposal.customerEmail) {
-        const emailBody = (proposal.emailBody || "").replace("[PROPOSAL_LINK]", webViewLink);
+        let emailBody = (proposal.emailBody || "").replace("[PROPOSAL_LINK]", webViewLink);
+        if (!emailBody.includes(webViewLink)) {
+          emailBody += `\n\nView your proposal here: ${webViewLink}`;
+        }
         const result = await createGmailDraft(
           proposal.customerEmail,
           proposal.emailSubject || "Your Proposal",

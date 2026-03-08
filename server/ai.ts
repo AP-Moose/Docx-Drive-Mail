@@ -21,47 +21,55 @@ export async function generateProposal(
   scopeNotes: string,
   mode: string
 ): Promise<GeneratedProposal> {
-  const systemPrompt = `You are a professional contractor proposal writer.
-You write clear, professional proposals that are easy for homeowners to understand.
-Tone: professional but not corporate, friendly and confident.
-Do NOT invent facts not provided. Use [TBD] for missing critical details.`;
+  const systemPrompt = `You are a professional contractor proposal writer for Inspiring Services, a home improvement company.
+You write clean, direct proposals that are easy for homeowners to read. No fluff, no filler, no corporate jargon.
+The contractor often dictates scope notes by voice, so the input may have typos, run-on sentences, and rough grammar — extract the facts and write professionally.
+NEVER use bracket placeholders like [TBD], [TBD - xyz], [Client Name], etc. in the proposal body. If information is not provided, simply omit it. If something is to be decided by the homeowner, say it naturally (e.g. "Color to be selected by homeowner").
+The ONLY allowed bracket placeholder is [PROPOSAL_LINK] in the emailBody field — this is required and will be replaced with the actual link.`;
 
   const userPrompt = `Write a contractor proposal with these details:
 
 Customer: ${customerName}
 ${jobAddress ? `Job Address: ${jobAddress}` : ""}
 
-Scope Notes from Contractor:
+Scope Notes from Contractor (may be rough voice dictation):
 ${scopeNotes}
 
-Based on the scope notes, determine the project type (e.g. Bathroom, Kitchen, Roofing, Deck, Flooring, Painting, Siding, Fencing, General Remodel, etc.).
-If the contractor mentioned pricing, timeline, or materials in the scope notes, include those details in the proposal.
+Generate a clean, professional proposal using this EXACT structure. Match the style of this example output:
 
-Use this EXACT section structure for the proposal body (use ALL CAPS headings):
+---
+BATHROOM RENOVATION PROPOSAL
+
+5200 Hilltop Dr, Brookhaven
 
 PROJECT SCOPE
-- List each work item as a bullet point (use "- " prefix)
-- Be specific about what is being removed, installed, replaced
-- Include materials if mentioned
+
+- Full demolition of existing bathroom
+- Removal of all mold-affected drywall and materials
+- Treatment and sanitizing of impacted framing areas
+- Proper debris disposal
 
 TOTAL INVESTMENT
-State the price as a flat rate or estimate range
-Include a line about what the price covers (labor, materials, cleanup, etc.)
+
+$9,895 (Flat Rate)
+
+This price includes all labor, standard installation materials, mold remediation treatment, debris removal, and full project management.
 
 DEPOSIT SCHEDULE
-Break the total into payment milestones (typically thirds):
-- One-third due upon contract signing
-- One-third due on the first day of on-site work
-- Final one-third due upon project completion
-Calculate the actual dollar amounts
+
+- One-third ($3,298) due upon contract signing
+- One-third ($3,298) due on the first day of on-site work
+- Final one-third ($3,299) due upon project completion
 
 PROJECT DETAILS
-- Estimated timeline
-- Material selection notes
-- Exclusions (permits, structural, etc.)
-- Any other relevant notes
+
+- Estimated timeline: 5–7 working days
+- Final material selections to be confirmed prior to ordering
+- Permit fees (if required) not included
+- Any major structural repairs discovered during demolition will be discussed prior to proceeding
 
 ACCEPTANCE OF PROPOSAL
+
 By signing below, you agree to the scope of work and payment terms outlined above.
 
 Client Name (Printed): __________________________________________
@@ -69,24 +77,30 @@ Client Name (Printed): __________________________________________
 Client Signature: ________________________________________________
 
 Date: _______________________
+---
 
-Please provide:
-1. A professional proposal title (format: "[Project Type] Proposal" followed by the job address on a new line, e.g. "BATHROOM RENOVATION PROPOSAL\\n5200 Hilltop Dr, Brookhaven")
-2. The full proposal body following the exact section structure above
-3. ${mode === "proposal_email" ? "An email subject line and email body" : "Just the title and body (no email needed)"}
-4. The project type you inferred from the scope notes (a short label like "Deck", "Bathroom", "Roofing", etc.)
+Rules:
+- PROJECT SCOPE: One bullet per work item. Be specific. No sub-bullets or explanations.
+- TOTAL INVESTMENT: State the price. One sentence about what it includes.
+- DEPOSIT SCHEDULE: Split into thirds with calculated dollar amounts. Use bullet points.
+- PROJECT DETAILS: Brief bullet points only. Timeline, material notes, exclusions.
+- ACCEPTANCE OF PROPOSAL: Exactly as shown above — signing line, signature line, date line.
+- If the contractor mentions multiple separate estimates/prices for different areas, list them all clearly in TOTAL INVESTMENT with a combined total.
+- Do NOT add sections that aren't in the example. Do NOT add warranty info, terms and conditions, company descriptions, or any other extra sections.
+- Do NOT use any bracket placeholders like [TBD] anywhere.
+- Keep every line short and direct. No paragraphs in the scope section.
 
-Format your response as JSON with these exact keys:
+Title format: "[PROJECT TYPE] PROPOSAL" (all caps, e.g. "KITCHEN RENOVATION PROPOSAL")
+If there's an address, put it on a second line of the title.
+
+Please provide as JSON:
 {
-  "title": "...",
-  "body": "...",
-  "emailSubject": "...",
-  "emailBody": "...",
-  "projectType": "..."
-}
-
-For the email body, include a friendly message mentioning the proposal and that the customer can view it via a link that will be added later. Use [PROPOSAL_LINK] as the placeholder for the link.
-The email should be warm and professional. Sign off generically as "The Contractor".`;
+  "title": "PROJECT TYPE PROPOSAL\\nAddress if provided",
+  "body": "the full proposal body starting from PROJECT SCOPE through the signature lines",
+  "emailSubject": "${mode === "proposal_email" ? "a short professional email subject" : ""}",
+  "emailBody": "${mode === "proposal_email" ? "a brief, friendly email body — keep it short and casual like a text from a contractor. Use [PROPOSAL_LINK] as placeholder for the link. Sign off as the contractor." : ""}",
+  "projectType": "short label like Bathroom, Kitchen, Flooring, etc."
+}`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-5.1",
@@ -115,9 +129,9 @@ export async function refineProposal(
   originalData: Partial<Proposal>
 ): Promise<{ body: string }> {
   const shortcutMap: Record<string, string> = {
-    shorter: "Make this proposal more concise. Keep all key facts but remove unnecessary filler. Keep the same section structure (PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, ACCEPTANCE OF PROPOSAL).",
-    longer: "Expand this proposal with more detail. Add more specifics about the scope, materials, and process. Keep the same section structure.",
-    regenerate: "Rewrite this proposal from scratch using the same facts, but with fresh wording. Keep the same section structure (PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, ACCEPTANCE OF PROPOSAL).",
+    shorter: "Make this proposal more concise. Remove unnecessary words but keep all facts and dollar amounts. Keep the exact same section structure.",
+    longer: "Add more detail to the scope items. Keep the same section structure and style — no fluff, just more specifics.",
+    regenerate: "Rewrite this proposal from scratch using the same facts and prices. Keep the exact same section structure. Fresh wording, same clean style.",
   };
 
   const resolvedInstruction = shortcutMap[instruction] || instruction;
@@ -128,7 +142,7 @@ export async function refineProposal(
       {
         role: "system",
         content:
-          "You are a professional contractor proposal writer. Revise the following proposal as instructed. Return only the revised proposal body text, no JSON wrapper, no markdown fences. Maintain the section structure with ALL CAPS headings (PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, ACCEPTANCE OF PROPOSAL).",
+          "You are a professional contractor proposal writer for Inspiring Services. Revise the proposal as instructed. Return ONLY the revised proposal body text — no JSON, no markdown fences, no extra commentary. Keep the section structure: PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, ACCEPTANCE OF PROPOSAL. Keep it clean and direct — no fluff, no bracket placeholders. Never use [TBD] or any bracket notation.",
       },
       {
         role: "user",
