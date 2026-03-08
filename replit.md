@@ -43,6 +43,12 @@ Mobile-first web app for contractors to create professional proposals, upload to
 4. **Confirm** — formatted proposal preview, editable email subject/body, recipient list, explicit send
 5. **Done** — links to Drive doc, Gmail Sent, copy link, download .docx
 
+## Settings Page
+
+- `/settings` — shows live connection status for Google Drive and Gmail
+- Tests actual API connections (not just env var existence)
+- Accessible from home page via Settings link at bottom
+
 ## Modes
 
 - `proposal_email` — generates proposal + sends email with attachment and Drive link (default)

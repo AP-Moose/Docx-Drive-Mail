@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Plus, Clock, HardHat, FileText } from "lucide-react";
+import { Plus, Clock, HardHat, FileText, Settings } from "lucide-react";
 
 export default function Home() {
   const [, navigate] = useLocation();
@@ -60,7 +60,15 @@ export default function Home() {
         </button>
       </div>
 
-      <div className="px-5 pb-8 text-center">
+      <div className="px-5 pb-8 flex flex-col items-center gap-3">
+        <button
+          data-testid="button-settings"
+          onClick={() => navigate("/settings")}
+          className="flex items-center gap-2 text-sm text-muted-foreground active:text-foreground transition-colors"
+        >
+          <Settings className="w-4 h-4" />
+          Settings
+        </button>
         <p className="text-xs text-muted-foreground">
           Powered by AI • Saves to Google Drive
         </p>

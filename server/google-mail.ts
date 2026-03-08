@@ -1,6 +1,6 @@
 /**
  * Gmail integration via Replit Connectors + googleapis
- * Connection ID: conn_google-mail_01KK2ZW3XA21BVEEFSM7VC7Y6R
+ * Connection ID: conn_google-mail_01KK75AGEXV5QPJPD5F7YKR8AT
  *
  * Available scope: gmail.send — sends email directly (no draft creation possible)
  * WARNING: Never cache the Gmail client — access tokens expire.
@@ -61,6 +61,15 @@ async function getUncachableGmailClient() {
 
 export function isGmailConnected(): boolean {
   return !!process.env.REPLIT_CONNECTORS_HOSTNAME;
+}
+
+export async function testGmailConnection(): Promise<boolean> {
+  try {
+    await getAccessToken();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Encode to base64url for Gmail raw message */

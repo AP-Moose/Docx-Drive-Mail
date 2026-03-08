@@ -1,15 +1,12 @@
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import {
   ArrowLeft,
   ExternalLink,
-  Mail,
   FileText,
-  Copy,
   Loader2,
   HardHat,
   Clock,
@@ -161,19 +158,6 @@ export default function RecentProposals() {
                   </Button>
                 )}
 
-                {p.gmailDraftId && (
-                  <Button
-                    data-testid={`button-gmail-${p.id}`}
-                    size="sm"
-                    variant="secondary"
-                    asChild
-                  >
-                    <a href="https://mail.google.com/mail/#drafts" target="_blank" rel="noopener noreferrer">
-                      <Mail className="w-3.5 h-3.5 mr-1" />
-                      Draft
-                    </a>
-                  </Button>
-                )}
               </div>
             </div>
           ))}

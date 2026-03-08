@@ -7,6 +7,7 @@ import Home from "@/pages/home";
 import NewProposal from "@/pages/new-proposal";
 import RecentProposals from "@/pages/recent-proposals";
 import ProposalDetail from "@/pages/proposal-detail";
+import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -16,6 +17,7 @@ function Router() {
       <Route path="/new" component={NewProposal} />
       <Route path="/recent" component={RecentProposals} />
       <Route path="/proposals/:id" component={ProposalDetail} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );

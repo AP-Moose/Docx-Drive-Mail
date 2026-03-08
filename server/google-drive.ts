@@ -9,6 +9,20 @@ export function isDriveConnected(): boolean {
   return !!process.env.REPLIT_CONNECTORS_HOSTNAME;
 }
 
+export async function testDriveConnection(): Promise<boolean> {
+  try {
+    if (!isDriveConnected()) return false;
+    const connectors = getConnectors();
+    const resp = await connectors.proxy("google-drive", "/drive/v3/about?fields=user", {
+      method: "GET",
+    });
+    const data = await resp.json() as any;
+    return !!data.user;
+  } catch {
+    return false;
+  }
+}
+
 /** Build a fresh connectors client — never cache, tokens expire */
 function getConnectors() {
   return new ReplitConnectors();

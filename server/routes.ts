@@ -3,8 +3,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateProposal, refineProposal } from "./ai";
 import { generateDocx } from "./docx-generator";
-import { uploadToDrive, setFilePublic, isDriveConnected } from "./google-drive";
-import { createGmailDraft, isGmailConnected } from "./google-mail";
+import { uploadToDrive, setFilePublic, isDriveConnected, testDriveConnection } from "./google-drive";
+import { createGmailDraft, isGmailConnected, testGmailConnection } from "./google-mail";
 import { z } from "zod";
 import { insertProposalSchema } from "@shared/schema";
 
@@ -15,6 +15,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       drive: isDriveConnected(),
       gmail: isGmailConnected(),
     });
+  });
+
+  app.get("/api/settings/status", async (_req: Request, res: Response) => {
+    try {
+      const [driveOk, gmailOk] = await Promise.all([
+        testDriveConnection(),
+        testGmailConnection(),
+      ]);
+      res.json({
+        drive: { connected: driveOk },
+        gmail: { connected: gmailOk },
+      });
+    } catch (e) {
+      res.json({
+        drive: { connected: false },
+        gmail: { connected: false },
+      });
+    }
   });
 
   // ─── Proposals CRUD ─────────────────────────────────────────────────────────
