@@ -5,6 +5,7 @@ import { generateProposal, refineProposal } from "./ai";
 import { generateDocx } from "./docx-generator";
 import { uploadToDrive, setFilePublic, isDriveConnected, testDriveConnection, getDriveUserEmail } from "./google-drive";
 import { createGmailDraft, isGmailConnected, testGmailConnection, getGmailUserEmail } from "./google-mail";
+import { transcribeAudio } from "./transcribe";
 import { z } from "zod";
 import { insertProposalSchema } from "@shared/schema";
 
@@ -34,6 +35,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         drive: { connected: false },
         gmail: { connected: false },
       });
+    }
+  });
+
+  // ─── Transcribe ────────────────────────────────────────────────────────────
+  app.post("/api/transcribe", async (req: Request, res: Response) => {
+    try {
+      if (!req.body || typeof req.body !== 'object' || !Buffer.isBuffer(req.body)) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) {
+          chunks.push(chunk);
+        }
+        const audioBuffer = Buffer.concat(chunks);
+        const transcript = await transcribeAudio(audioBuffer);
+        return res.json({ transcript });
+      }
+      const transcript = await transcribeAudio(req.body);
+      res.json({ transcript });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Transcription failed" });
     }
   });
 

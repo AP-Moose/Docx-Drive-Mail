@@ -89,9 +89,9 @@ export default function NewProposal() {
   const [editedEmailSubject, setEditedEmailSubject] = useState("");
   const [editedEmailBody, setEditedEmailBody] = useState("");
   const [isListening, setIsListening] = useState(false);
-  const [recognition, setRecognition] = useState<any>(null);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [isChatListening, setIsChatListening] = useState(false);
-  const [chatRecognition, setChatRecognition] = useState<any>(null);
+  const [chatMediaRecorder, setChatMediaRecorder] = useState<MediaRecorder | null>(null);
   const [chatInput, setChatInput] = useState("");
   const chatInputRef = useRef<HTMLInputElement>(null);
   const [previewMode, setPreviewMode] = useState(false);
@@ -107,59 +107,75 @@ export default function NewProposal() {
   });
 
   useEffect(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const rec = new SpeechRecognition();
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.onresult = (e: any) => {
-        const transcript = Array.from(e.results)
-          .map((r: any) => r[0].transcript)
-          .join(" ");
-        setForm((f) => ({ ...f, scopeNotes: transcript }));
-      };
-      rec.onend = () => setIsListening(false);
-      setRecognition(rec);
+    const initMediaRecorder = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        const rec = new MediaRecorder(stream);
+        const chunks: BlobPart[] = [];
+        rec.ondataavailable = (e) => chunks.push(e.data);
+        rec.onstop = async () => {
+          const audioBlob = new Blob(chunks, { type: "audio/webm" });
+          const arrayBuffer = await audioBlob.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const res = await fetch("/api/transcribe", { method: "POST", body: buffer });
+          const data = await res.json() as { transcript?: string };
+          if (data.transcript) {
+            setForm((f) => ({ ...f, scopeNotes: data.transcript }));
+          }
+          stream.getTracks().forEach((t) => t.stop());
+          setIsListening(false);
+        };
+        setMediaRecorder(rec);
 
-      const chatRec = new SpeechRecognition();
-      chatRec.continuous = true;
-      chatRec.interimResults = true;
-      chatRec.onresult = (e: any) => {
-        const transcript = Array.from(e.results)
-          .map((r: any) => r[0].transcript)
-          .join(" ");
-        setChatInput(transcript);
-      };
-      chatRec.onend = () => setIsChatListening(false);
-      setChatRecognition(chatRec);
-    }
-  }, []);
+        const chatStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const chatRec = new MediaRecorder(chatStream);
+        const chatChunks: BlobPart[] = [];
+        chatRec.ondataavailable = (e) => chatChunks.push(e.data);
+        chatRec.onstop = async () => {
+          const audioBlob = new Blob(chatChunks, { type: "audio/webm" });
+          const arrayBuffer = await audioBlob.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const res = await fetch("/api/transcribe", { method: "POST", body: buffer });
+          const data = await res.json() as { transcript?: string };
+          if (data.transcript) {
+            setChatInput(data.transcript);
+          }
+          chatStream.getTracks().forEach((t) => t.stop());
+          setIsChatListening(false);
+        };
+        setChatMediaRecorder(chatRec);
+      } catch (e) {
+        toast({ title: "Microphone access denied", description: "Allow microphone access to use voice", variant: "destructive" });
+      }
+    };
+    initMediaRecorder();
+  }, [toast]);
 
   function toggleVoice() {
-    if (!recognition) {
+    if (!mediaRecorder) {
       toast({ title: "Voice not supported", description: "Use typing instead", variant: "destructive" });
       return;
     }
     if (isListening) {
-      recognition.stop();
+      mediaRecorder.stop();
       setIsListening(false);
     } else {
-      recognition.start();
+      mediaRecorder.start();
       setIsListening(true);
     }
   }
 
   function toggleChatVoice() {
-    if (!chatRecognition) {
+    if (!chatMediaRecorder) {
       toast({ title: "Voice not supported", description: "Use typing instead", variant: "destructive" });
       return;
     }
     if (isChatListening) {
-      chatRecognition.stop();
+      chatMediaRecorder.stop();
       setIsChatListening(false);
     } else {
-      chatRecognition.start();
+      chatMediaRecorder.start();
       setIsChatListening(true);
     }
   }
@@ -455,7 +471,7 @@ export default function NewProposal() {
               </p>
             </div>
 
-            {recognition && (
+            {mediaRecorder && (
               <button
                 data-testid="button-voice"
                 type="button"
@@ -472,22 +488,22 @@ export default function NewProposal() {
                   <Mic className="w-10 h-10" />
                 )}
                 <span className="text-lg font-semibold">
-                  {isListening ? "Tap to Stop" : "Tap to Speak"}
+                  {isListening ? "Tap to Stop Recording" : "Tap to Record"}
                 </span>
                 {!isListening && (
-                  <span className="text-sm opacity-70">Describe the job out loud</span>
+                  <span className="text-sm opacity-70">Describe the job — Whisper will transcribe</span>
                 )}
                 {isListening && (
-                  <span className="text-sm opacity-80 animate-pulse">Listening…</span>
+                  <span className="text-sm opacity-80 animate-pulse">Recording…</span>
                 )}
               </button>
             )}
 
             <div className="relative">
-              {!recognition && (
+              {!mediaRecorder && (
                 <Label className="text-base font-medium">Describe the Project</Label>
               )}
-              {recognition && (
+              {mediaRecorder && (
                 <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide font-medium">
                   Or type it out:
                 </p>
@@ -624,7 +640,7 @@ export default function NewProposal() {
                   }}
                   disabled={refineMutation.isPending}
                 />
-                {chatRecognition && (
+                {chatMediaRecorder && (
                   <Button
                     data-testid="button-chat-voice"
                     variant={isChatListening ? "destructive" : "secondary"}
