@@ -74,9 +74,12 @@ export async function testGmailConnection(): Promise<boolean> {
 
 export async function getGmailUserEmail(): Promise<string | null> {
   try {
-    const gmail = await getUncachableGmailClient();
-    const profile = await gmail.users.getProfile({ userId: "me" });
-    return profile.data.emailAddress || null;
+    const accessToken = await getAccessToken();
+    const resp = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const data = await resp.json() as any;
+    return data.email || null;
   } catch {
     return null;
   }
