@@ -1,3 +1,4 @@
+import express from "express";
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -39,23 +40,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ─── Transcribe ────────────────────────────────────────────────────────────
-  app.post("/api/transcribe", async (req: Request, res: Response) => {
-    try {
-      if (!req.body || typeof req.body !== 'object' || !Buffer.isBuffer(req.body)) {
-        const chunks: Buffer[] = [];
-        for await (const chunk of req) {
-          chunks.push(chunk);
+  app.post(
+    "/api/transcribe",
+    express.raw({ type: "*/*", limit: "50mb" }),
+    async (req: Request, res: Response) => {
+      try {
+        if (!req.body || !Buffer.isBuffer(req.body) || req.body.length === 0) {
+          return res.status(400).json({ error: "No audio data received" });
         }
-        const audioBuffer = Buffer.concat(chunks);
-        const transcript = await transcribeAudio(audioBuffer);
-        return res.json({ transcript });
+        const transcript = await transcribeAudio(req.body);
+        res.json({ transcript });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message || "Transcription failed" });
       }
-      const transcript = await transcribeAudio(req.body);
-      res.json({ transcript });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message || "Transcription failed" });
     }
-  });
+  );
 
   // ─── Proposals CRUD ─────────────────────────────────────────────────────────
   app.get("/api/proposals", async (_req: Request, res: Response) => {

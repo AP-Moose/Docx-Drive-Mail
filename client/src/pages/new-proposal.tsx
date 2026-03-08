@@ -89,9 +89,11 @@ export default function NewProposal() {
   const [editedEmailSubject, setEditedEmailSubject] = useState("");
   const [editedEmailBody, setEditedEmailBody] = useState("");
   const [isListening, setIsListening] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [isChatListening, setIsChatListening] = useState(false);
-  const [chatMediaRecorder, setChatMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [isChatTranscribing, setIsChatTranscribing] = useState(false);
+  const scopeRecorderRef = useRef<MediaRecorder | null>(null);
+  const chatRecorderRef = useRef<MediaRecorder | null>(null);
   const [chatInput, setChatInput] = useState("");
   const chatInputRef = useRef<HTMLInputElement>(null);
   const [previewMode, setPreviewMode] = useState(false);
@@ -106,77 +108,75 @@ export default function NewProposal() {
     mode: initialMode,
   });
 
-  useEffect(() => {
-    const initMediaRecorder = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
-        const rec = new MediaRecorder(stream);
-        const chunks: BlobPart[] = [];
-        rec.ondataavailable = (e) => chunks.push(e.data);
-        rec.onstop = async () => {
-          const audioBlob = new Blob(chunks, { type: "audio/webm" });
-          const arrayBuffer = await audioBlob.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-          const res = await fetch("/api/transcribe", { method: "POST", body: buffer });
-          const data = await res.json() as { transcript?: string };
-          if (data.transcript) {
-            setForm((f) => ({ ...f, scopeNotes: data.transcript }));
-          }
-          stream.getTracks().forEach((t) => t.stop());
-          setIsListening(false);
-        };
-        setMediaRecorder(rec);
-
-        const chatStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const chatRec = new MediaRecorder(chatStream);
-        const chatChunks: BlobPart[] = [];
-        chatRec.ondataavailable = (e) => chatChunks.push(e.data);
-        chatRec.onstop = async () => {
-          const audioBlob = new Blob(chatChunks, { type: "audio/webm" });
-          const arrayBuffer = await audioBlob.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-          const res = await fetch("/api/transcribe", { method: "POST", body: buffer });
-          const data = await res.json() as { transcript?: string };
-          if (data.transcript) {
-            setChatInput(data.transcript);
-          }
-          chatStream.getTracks().forEach((t) => t.stop());
-          setIsChatListening(false);
-        };
-        setChatMediaRecorder(chatRec);
-      } catch (e) {
-        toast({ title: "Microphone access denied", description: "Allow microphone access to use voice", variant: "destructive" });
-      }
-    };
-    initMediaRecorder();
-  }, [toast]);
-
-  function toggleVoice() {
-    if (!mediaRecorder) {
-      toast({ title: "Voice not supported", description: "Use typing instead", variant: "destructive" });
-      return;
-    }
-    if (isListening) {
-      mediaRecorder.stop();
-      setIsListening(false);
-    } else {
-      mediaRecorder.start();
-      setIsListening(true);
+  async function transcribeBlob(blob: Blob): Promise<string | null> {
+    try {
+      const res = await fetch("/api/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": blob.type || "audio/webm" },
+        body: blob,
+      });
+      const data = await res.json() as { transcript?: string; error?: string };
+      if (!res.ok || data.error) throw new Error(data.error || "Transcription failed");
+      return data.transcript ?? null;
+    } catch (e: any) {
+      toast({ title: "Transcription failed", description: e.message, variant: "destructive" });
+      return null;
     }
   }
 
-  function toggleChatVoice() {
-    if (!chatMediaRecorder) {
-      toast({ title: "Voice not supported", description: "Use typing instead", variant: "destructive" });
+  async function toggleVoice() {
+    if (isListening) {
+      scopeRecorderRef.current?.stop();
+      setIsListening(false);
       return;
     }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+      rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setIsListening(false);
+        setIsTranscribing(true);
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        const transcript = await transcribeBlob(blob);
+        if (transcript) setForm((f) => ({ ...f, scopeNotes: transcript }));
+        setIsTranscribing(false);
+      };
+      scopeRecorderRef.current = rec;
+      rec.start();
+      setIsListening(true);
+    } catch {
+      toast({ title: "Microphone access denied", description: "Allow microphone access to use voice", variant: "destructive" });
+    }
+  }
+
+  async function toggleChatVoice() {
     if (isChatListening) {
-      chatMediaRecorder.stop();
+      chatRecorderRef.current?.stop();
       setIsChatListening(false);
-    } else {
-      chatMediaRecorder.start();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+      rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setIsChatListening(false);
+        setIsChatTranscribing(true);
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        const transcript = await transcribeBlob(blob);
+        if (transcript) setChatInput(transcript);
+        setIsChatTranscribing(false);
+      };
+      chatRecorderRef.current = rec;
+      rec.start();
       setIsChatListening(true);
+    } catch {
+      toast({ title: "Microphone access denied", description: "Allow microphone access to use voice", variant: "destructive" });
     }
   }
 
@@ -471,43 +471,41 @@ export default function NewProposal() {
               </p>
             </div>
 
-            {mediaRecorder && (
-              <button
-                data-testid="button-voice"
-                type="button"
-                onClick={toggleVoice}
-                className={`w-full flex flex-col items-center justify-center gap-3 rounded-2xl p-8 transition-all active:scale-[0.97] ${
-                  isListening
-                    ? "bg-red-500 text-white shadow-lg shadow-red-500/25"
-                    : "bg-primary/10 text-primary border-2 border-dashed border-primary/30"
-                }`}
-              >
-                {isListening ? (
-                  <MicOff className="w-10 h-10" />
-                ) : (
-                  <Mic className="w-10 h-10" />
-                )}
-                <span className="text-lg font-semibold">
-                  {isListening ? "Tap to Stop Recording" : "Tap to Record"}
-                </span>
-                {!isListening && (
-                  <span className="text-sm opacity-70">Describe the job — Whisper will transcribe</span>
-                )}
-                {isListening && (
-                  <span className="text-sm opacity-80 animate-pulse">Recording…</span>
-                )}
-              </button>
-            )}
+            <button
+              data-testid="button-voice"
+              type="button"
+              onClick={toggleVoice}
+              disabled={isTranscribing}
+              className={`w-full flex flex-col items-center justify-center gap-3 rounded-2xl p-8 transition-all active:scale-[0.97] disabled:opacity-60 disabled:pointer-events-none ${
+                isListening
+                  ? "bg-red-500 text-white shadow-lg shadow-red-500/25"
+                  : isTranscribing
+                  ? "bg-primary/20 text-primary border-2 border-primary/40"
+                  : "bg-primary/10 text-primary border-2 border-dashed border-primary/30"
+              }`}
+            >
+              {isTranscribing ? (
+                <Loader2 className="w-10 h-10 animate-spin" />
+              ) : isListening ? (
+                <MicOff className="w-10 h-10" />
+              ) : (
+                <Mic className="w-10 h-10" />
+              )}
+              <span className="text-lg font-semibold">
+                {isTranscribing ? "Transcribing…" : isListening ? "Tap to Stop Recording" : "Tap to Record"}
+              </span>
+              {!isListening && !isTranscribing && (
+                <span className="text-sm opacity-70">Describe the job — Whisper will transcribe</span>
+              )}
+              {isListening && (
+                <span className="text-sm opacity-80 animate-pulse">Recording…</span>
+              )}
+            </button>
 
             <div className="relative">
-              {!mediaRecorder && (
-                <Label className="text-base font-medium">Describe the Project</Label>
-              )}
-              {mediaRecorder && (
-                <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide font-medium">
-                  Or type it out:
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide font-medium">
+                Or type it out:
+              </p>
               <Textarea
                 data-testid="textarea-scope"
                 className="text-base min-h-[180px] resize-none"
@@ -632,7 +630,7 @@ export default function NewProposal() {
                   ref={chatInputRef}
                   data-testid="input-chat-refine"
                   className="flex-1 h-10 text-sm"
-                  placeholder={isChatListening ? "Listening…" : 'e.g. "Change price to $10,000"'}
+                  placeholder={isChatListening ? "Listening…" : isChatTranscribing ? "Transcribing…" : 'e.g. "Change price to $10,000"'}
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -640,22 +638,22 @@ export default function NewProposal() {
                   }}
                   disabled={refineMutation.isPending}
                 />
-                {chatMediaRecorder && (
-                  <Button
-                    data-testid="button-chat-voice"
-                    variant={isChatListening ? "destructive" : "secondary"}
-                    size="sm"
-                    className="h-10 px-3"
-                    onClick={toggleChatVoice}
-                    disabled={refineMutation.isPending}
-                  >
-                    {isChatListening ? (
-                      <MicOff className="w-4 h-4" />
-                    ) : (
-                      <Mic className="w-4 h-4" />
-                    )}
-                  </Button>
-                )}
+                <Button
+                  data-testid="button-chat-voice"
+                  variant={isChatListening ? "destructive" : "secondary"}
+                  size="sm"
+                  className="h-10 px-3"
+                  onClick={toggleChatVoice}
+                  disabled={refineMutation.isPending || isChatTranscribing}
+                >
+                  {isChatTranscribing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : isChatListening ? (
+                    <MicOff className="w-4 h-4" />
+                  ) : (
+                    <Mic className="w-4 h-4" />
+                  )}
+                </Button>
                 <Button
                   data-testid="button-chat-send"
                   size="sm"
@@ -674,6 +672,12 @@ export default function NewProposal() {
                 <p className="text-sm text-primary mt-2 flex items-center gap-2 animate-pulse">
                   <Mic className="w-3.5 h-3.5" />
                   Listening — tap mic to stop, then send
+                </p>
+              )}
+              {isChatTranscribing && (
+                <p className="text-sm text-primary mt-2 flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Transcribing…
                 </p>
               )}
               {refineMutation.isPending && (
