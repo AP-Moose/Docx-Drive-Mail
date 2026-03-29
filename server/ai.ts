@@ -1,10 +1,14 @@
 import OpenAI from "openai";
 import type { Proposal } from "@shared/schema";
+import { appConfig, hasOpenAIConfig } from "./config";
 
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+function getOpenAIClient() {
+  if (!hasOpenAIConfig()) throw new Error("OPENAI_NOT_CONFIGURED");
+  return new OpenAI({
+    apiKey: appConfig.openaiApiKey,
+    baseURL: appConfig.openaiBaseUrl,
+  });
+}
 
 export interface GeneratedProposal {
   title: string;
@@ -21,6 +25,7 @@ export async function generateProposal(
   scopeNotes: string,
   mode: string
 ): Promise<GeneratedProposal> {
+  const openai = getOpenAIClient();
   const systemPrompt = `You are a professional contractor proposal writer for Inspiring Services, a home improvement company.
 You write clean, direct proposals that are easy for homeowners to read. No fluff, no filler, no corporate jargon.
 The contractor often dictates scope notes by voice, so the input may have typos, run-on sentences, and rough grammar — extract the facts and write professionally.
@@ -103,7 +108,7 @@ Please provide as JSON:
 }`;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-5.1",
+    model: appConfig.openaiChatModel,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
@@ -128,6 +133,7 @@ export async function refineProposal(
   instruction: string,
   originalData: Partial<Proposal>
 ): Promise<{ body: string }> {
+  const openai = getOpenAIClient();
   const shortcutMap: Record<string, string> = {
     shorter: "Make this proposal more concise. Remove unnecessary words but keep all facts and dollar amounts. Keep the exact same section structure.",
     longer: "Add more detail to the scope items. Keep the same section structure and style — no fluff, just more specifics.",
@@ -137,7 +143,7 @@ export async function refineProposal(
   const resolvedInstruction = shortcutMap[instruction] || instruction;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-5.1",
+    model: appConfig.openaiChatModel,
     messages: [
       {
         role: "system",

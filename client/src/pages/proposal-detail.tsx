@@ -1,27 +1,39 @@
 import { useLocation, useParams } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { format } from "date-fns";
+import { ArrowLeft, CheckCircle2, Copy, ExternalLink, FileDown, HardHat, Loader2, Mail, RotateCcw, Scissors, AlignLeft, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import {
-  ArrowLeft,
-  ExternalLink,
-  Mail,
-  FileDown,
-  Copy,
-  Loader2,
-  Upload,
-  CheckCircle2,
-  HardHat,
-  RotateCcw,
-  Scissors,
-  AlignLeft,
-} from "lucide-react";
-import type { Proposal } from "@shared/schema";
-import { format } from "date-fns";
 import ProposalPreview from "@/components/proposal-preview";
+import type { Proposal } from "@shared/schema";
+
+interface FinalizeResult {
+  proposal: Proposal;
+  completion: {
+    proposalReady: boolean;
+    fileSaved: boolean;
+    emailSent: boolean;
+    nextStepComplete: boolean;
+  };
+  links: {
+    driveWebLink?: string;
+    gmailSentUrl?: string;
+  };
+}
+
+function parseApiError(error: unknown): string {
+  if (!(error instanceof Error)) return "Something went wrong.";
+  const raw = error.message.includes(": ") ? error.message.split(": ").slice(1).join(": ") : error.message;
+  try {
+    const parsed = JSON.parse(raw) as { error?: string };
+    return parsed.error || error.message;
+  } catch {
+    return error.message;
+  }
+}
 
 export default function ProposalDetail() {
   const { id } = useParams();
@@ -31,282 +43,243 @@ export default function ProposalDetail() {
 
   const [editedText, setEditedText] = useState("");
   const [isEditing, setIsEditing] = useState(false);
-  const [finalized, setFinalized] = useState(false);
+  const [finalizeResult, setFinalizeResult] = useState<FinalizeResult | null>(null);
 
   const { data: proposal, isLoading } = useQuery<Proposal>({
     queryKey: ["/api/proposals", id],
-    select: (p: any) => {
-      if (!editedText && p?.proposalText) {
-        setEditedText(p.proposalText);
-      }
-      return p;
+    select: (record: Proposal) => {
+      if (!editedText && record?.proposalText) setEditedText(record.proposalText);
+      return record;
     },
   });
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("PATCH", `/api/proposals/${id}`, { proposalText: editedText });
-      return res.json() as Promise<Proposal>;
+      return (await res.json()) as Proposal;
     },
     onSuccess: () => {
-      toast({ title: "Saved!" });
+      toast({ title: "Saved", description: "Proposal edits were saved." });
       setIsEditing(false);
       qc.invalidateQueries({ queryKey: ["/api/proposals", id] });
     },
-    onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+    onError: (error) => {
+      toast({ title: "Save failed", description: parseApiError(error), variant: "destructive" });
+    },
   });
 
   const refineMutation = useMutation({
     mutationFn: async (instruction: "shorter" | "longer" | "regenerate") => {
       await apiRequest("PATCH", `/api/proposals/${id}`, { proposalText: editedText });
       const res = await apiRequest("POST", `/api/proposals/${id}/refine`, { instruction });
-      return res.json() as Promise<Proposal>;
+      return (await res.json()) as Proposal;
     },
-    onSuccess: (p) => {
-      setEditedText(p.proposalText || "");
+    onSuccess: (updated) => {
+      setEditedText(updated.proposalText || "");
       qc.invalidateQueries({ queryKey: ["/api/proposals", id] });
     },
-    onError: (e: any) => toast({ title: "Refinement failed", description: e.message, variant: "destructive" }),
+    onError: (error) => {
+      toast({ title: "Refinement failed", description: parseApiError(error), variant: "destructive" });
+    },
   });
 
   const finalizeMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("PATCH", `/api/proposals/${id}`, { proposalText: editedText });
       const res = await apiRequest("POST", `/api/proposals/${id}/finalize`);
-      return res.json() as Promise<{ fileId: string; webViewLink: string; gmailDraftId?: string; proposal: Proposal }>;
+      return (await res.json()) as FinalizeResult;
     },
-    onSuccess: () => {
-      setFinalized(true);
+    onSuccess: (result) => {
+      setFinalizeResult(result);
       qc.invalidateQueries({ queryKey: ["/api/proposals", id] });
       qc.invalidateQueries({ queryKey: ["/api/proposals"] });
     },
-    onError: (e: any) => {
-      const code = (e as any).code;
-      if (code === "DRIVE_NOT_CONNECTED" || code === "GMAIL_NOT_CONNECTED") {
-        toast({
-          title: "Google not connected",
-          description: "Please connect your Google account to save to Drive.",
-          variant: "destructive",
-        });
-      } else {
-        toast({ title: "Failed", description: e.message, variant: "destructive" });
-      }
+    onError: (error) => {
+      toast({ title: "Could not finish proposal", description: parseApiError(error), variant: "destructive" });
     },
   });
 
   function copyLink() {
-    if (proposal?.driveWebLink) {
-      navigator.clipboard.writeText(proposal.driveWebLink);
-      toast({ title: "Link copied!" });
-    }
+    const link = finalizeResult?.links.driveWebLink || proposal?.driveWebLink;
+    if (!link) return;
+    navigator.clipboard.writeText(link);
+    toast({ title: "Link copied", description: "The Drive link is on your clipboard." });
   }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   if (!proposal) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-5">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-5">
         <p className="text-muted-foreground">Proposal not found.</p>
         <Button onClick={() => navigate("/recent")}>Back to Recent</Button>
       </div>
     );
   }
 
-  const isComplete = proposal.status === "completed" || finalized;
+  const isComplete = proposal.status === "completed" || Boolean(finalizeResult?.completion.nextStepComplete);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="bg-primary px-5 pt-10 pb-6 text-primary-foreground">
-        <div className="flex items-center gap-3 mb-3">
-          <button onClick={() => navigate("/recent")} className="text-primary-foreground/80">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <HardHat className="w-5 h-5" />
-          <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-bold truncate">{proposal.customerName}</h1>
-            <p className="text-primary-foreground/75 text-sm">
-              {proposal.projectType && proposal.projectType !== "General" ? `${proposal.projectType} · ` : ""}v{proposal.version} · {format(new Date(proposal.createdAt), "MMM d, yyyy")}
-            </p>
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f7f8f6_0%,#ffffff_22%,#ffffff_100%)]">
+      <div className="mx-auto flex min-h-screen max-w-2xl flex-col">
+        <div className="bg-primary px-5 pb-6 pt-10 text-primary-foreground">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/recent")} className="rounded-full p-1 text-primary-foreground/80 transition-colors hover:text-primary-foreground">
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <HardHat className="h-5 w-5" />
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-lg font-semibold">{proposal.customerName}</h1>
+              <p className="text-sm text-primary-foreground/75">
+                {proposal.projectType && proposal.projectType !== "General" ? `${proposal.projectType} · ` : ""}
+                v{proposal.version} · {format(new Date(proposal.createdAt), "MMM d, yyyy")}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="flex-1 px-5 py-5 space-y-5">
-        {/* Proposal title */}
-        {proposal.proposalTitle && (
-          <h2 className="text-xl font-bold">{proposal.proposalTitle}</h2>
-        )}
+        <div className="flex-1 space-y-6 px-5 py-6">
+          {proposal.proposalTitle && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Saved proposal</p>
+              <h2 className="text-3xl font-semibold tracking-tight">{proposal.proposalTitle}</h2>
+            </div>
+          )}
 
-        {/* Proposal text */}
-        {proposal.proposalText && (
-          <div className="space-y-3">
-            {isEditing ? (
-              <>
-                <Textarea
-                  data-testid="textarea-proposal-edit"
-                  className="text-sm min-h-[300px] font-mono leading-relaxed resize-none"
-                  value={editedText}
-                  onChange={(e) => setEditedText(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <Button
-                    data-testid="button-save-edits"
-                    size="sm"
-                    onClick={() => saveMutation.mutate()}
-                    disabled={saveMutation.isPending}
-                  >
-                    {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={() => setIsEditing(false)}>
-                    Cancel
-                  </Button>
-                </div>
-
-                {/* Refine buttons */}
-                <div>
-                  <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">Adjust:</p>
-                  <div className="grid grid-cols-3 gap-2">
+          {proposal.proposalText && (
+            <>
+              {isEditing ? (
+                <div className="space-y-4">
+                  <Textarea
+                    data-testid="textarea-proposal-edit"
+                    className="min-h-[360px] rounded-[28px] bg-card px-5 py-5 font-mono text-sm leading-7 resize-none"
+                    value={editedText}
+                    onChange={(event) => setEditedText(event.target.value)}
+                  />
+                  <div className="flex gap-2">
                     <Button
-                      variant="secondary"
-                      size="sm"
-                      className="gap-1"
-                      disabled={refineMutation.isPending}
-                      onClick={() => refineMutation.mutate("shorter")}
+                      data-testid="button-save-edits"
+                      onClick={() => saveMutation.mutate()}
+                      disabled={saveMutation.isPending}
                     >
-                      <Scissors className="w-3.5 h-3.5" />
-                      Shorter
+                      {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Save
                     </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="gap-1"
-                      disabled={refineMutation.isPending}
-                      onClick={() => refineMutation.mutate("longer")}
-                    >
-                      <AlignLeft className="w-3.5 h-3.5" />
-                      Longer
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="gap-1"
-                      disabled={refineMutation.isPending}
-                      onClick={() => refineMutation.mutate("regenerate")}
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      Redo
+                    <Button variant="secondary" onClick={() => setIsEditing(false)}>
+                      Cancel
                     </Button>
                   </div>
-                  {refineMutation.isPending && (
-                    <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Rewriting…
-                    </div>
-                  )}
                 </div>
-              </>
-            ) : (
-              <>
+              ) : (
                 <ProposalPreview
                   title={proposal.proposalTitle || undefined}
-                  text={proposal.proposalText || ""}
+                  text={editedText}
                   customerName={proposal.customerName}
                   customerEmail={proposal.customerEmail || undefined}
                   jobAddress={proposal.jobAddress || undefined}
-                  className="max-h-[500px]"
+                  className="max-h-[560px]"
                 />
-                <Button
-                  data-testid="button-edit-proposal"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setIsEditing(true)}
-                >
-                  Edit Proposal
-                </Button>
-              </>
-            )}
-          </div>
-        )}
+              )}
 
-        {/* Links when completed */}
-        {isComplete && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-              <CheckCircle2 className="w-5 h-5" />
-              <span className="font-medium text-sm">Saved to Google Drive</span>
-            </div>
+              <div className="space-y-4 rounded-[28px] border border-border/80 bg-card px-5 py-5">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    data-testid="button-edit-proposal"
+                    variant="secondary"
+                    onClick={() => setIsEditing((current) => !current)}
+                  >
+                    {isEditing ? "Preview document" : "Edit text"}
+                  </Button>
+                  <Button variant="secondary" disabled={refineMutation.isPending} onClick={() => refineMutation.mutate("shorter")}>
+                    <Scissors className="mr-2 h-4 w-4" />
+                    Shorter
+                  </Button>
+                  <Button variant="secondary" disabled={refineMutation.isPending} onClick={() => refineMutation.mutate("longer")}>
+                    <AlignLeft className="mr-2 h-4 w-4" />
+                    Longer
+                  </Button>
+                  <Button variant="secondary" disabled={refineMutation.isPending} onClick={() => refineMutation.mutate("regenerate")}>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Redo
+                  </Button>
+                </div>
 
-            {proposal.driveWebLink && (
-              <a
-                href={proposal.driveWebLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                data-testid="link-drive"
-                className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4"
-              >
-                <ExternalLink className="w-5 h-5 text-green-600" />
-                <span className="font-medium">Open in Google Drive</span>
-              </a>
-            )}
+                {isComplete ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-primary">
+                      <CheckCircle2 className="h-5 w-5" />
+                      <span className="font-medium">Proposal package completed</span>
+                    </div>
 
-            {proposal.gmailDraftId && (
-              <a
-                href="https://mail.google.com/mail/#sent"
-                target="_blank"
-                rel="noopener noreferrer"
-                data-testid="link-gmail"
-                className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4"
-              >
-                <Mail className="w-5 h-5 text-green-500" />
-                <span className="font-medium">View Sent Email in Gmail</span>
-              </a>
-            )}
+                    {proposal.driveWebLink && (
+                      <a
+                        href={proposal.driveWebLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-testid="link-drive"
+                        className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-4"
+                      >
+                        <ExternalLink className="h-5 w-5 text-primary" />
+                        <span className="flex-1 font-medium">Open in Google Drive</span>
+                      </a>
+                    )}
 
-            {proposal.driveWebLink && (
-              <button
-                onClick={copyLink}
-                data-testid="button-copy"
-                className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4"
-              >
-                <Copy className="w-5 h-5 text-muted-foreground" />
-                <span className="font-medium">Copy Shareable Link</span>
-              </button>
-            )}
+                    {proposal.gmailMessageId && (
+                      <a
+                        href="https://mail.google.com/mail/#sent"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-testid="link-gmail"
+                        className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-4"
+                      >
+                        <Mail className="h-5 w-5 text-primary" />
+                        <span className="flex-1 font-medium">Open sent email</span>
+                      </a>
+                    )}
 
-            <a
-              href={`/api/proposals/${id}/docx`}
-              data-testid="link-docx"
-              className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4"
-            >
-              <FileDown className="w-5 h-5 text-muted-foreground" />
-              <span className="font-medium">Download Word Document</span>
-            </a>
-          </div>
-        )}
+                    {proposal.driveWebLink && (
+                      <button onClick={copyLink} data-testid="button-copy" className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-4 text-left">
+                        <Copy className="h-5 w-5 text-muted-foreground" />
+                        <span className="flex-1 font-medium">Copy shareable link</span>
+                      </button>
+                    )}
 
-        {/* Finalize button if not yet completed */}
-        {!isComplete && proposal.proposalText && (
-          <Button
-            data-testid="button-finalize"
-            className="w-full h-12"
-            onClick={() => finalizeMutation.mutate()}
-            disabled={finalizeMutation.isPending}
-          >
-            {finalizeMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            ) : (
-              <Upload className="w-4 h-4 mr-2" />
-            )}
-            {finalizeMutation.isPending ? "Saving…" : "Save to Drive"}
-          </Button>
-        )}
+                    <a
+                      href={`/api/proposals/${id}/docx`}
+                      data-testid="link-docx"
+                      className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-4"
+                    >
+                      <FileDown className="h-5 w-5 text-muted-foreground" />
+                      <span className="flex-1 font-medium">Download Word document</span>
+                    </a>
+                  </div>
+                ) : (
+                  <Button
+                    data-testid="button-finalize"
+                    className="h-12 w-full rounded-2xl"
+                    onClick={() => finalizeMutation.mutate()}
+                    disabled={finalizeMutation.isPending}
+                  >
+                    {finalizeMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : proposal.mode === "proposal_email" ? (
+                      <Send className="mr-2 h-4 w-4" />
+                    ) : (
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                    )}
+                    {proposal.mode === "proposal_email" ? "Send proposal" : "Save proposal"}
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

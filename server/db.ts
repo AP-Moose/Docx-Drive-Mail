@@ -1,9 +1,13 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "@shared/schema";
+import { appConfig, hasDatabaseConfig } from "./config";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+const pool = hasDatabaseConfig()
+  ? new Pool({
+      connectionString: appConfig.databaseUrl,
+    })
+  : null;
 
-export const db = drizzle(pool, { schema });
+export const db = pool ? drizzle(pool, { schema }) : null;
+export const hasDatabase = Boolean(db);

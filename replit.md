@@ -23,7 +23,7 @@ Mobile-first web app for contractors to create professional proposals, upload to
 ## Key Files
 
 - `shared/schema.ts` — Drizzle schema, types, insert schemas
-- `server/routes.ts` — API routes (CRUD, generate, refine, finalize, docx, drive-upload, gmail-send)
+- `server/routes.ts` — API routes (CRUD, generate, refine, finalize, docx, drive-upload, send-email)
 - `server/ai.ts` — OpenAI proposal generation (infers project type; outputs structured format: PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, ACCEPTANCE OF PROPOSAL)
 - `server/docx-generator.ts` — .docx generation via `docx` package (includes Inspiring Services logo at top)
 - `server/google-drive.ts` — Drive upload with folder hierarchy + public permission
@@ -41,7 +41,7 @@ Mobile-first web app for contractors to create professional proposals, upload to
 2. **Scope** — voice-first input (large mic button) or type; AI infers project type, pricing, timeline from notes
 3. **Review & Edit** — toggle between raw text edit and pretty preview, chat-based refinement (type or voice), quick buttons
 4. **Confirm** — formatted proposal preview, editable email subject/body, recipient list, explicit send
-5. **Done** — links to Drive doc, Gmail Sent, copy link, download .docx
+5. **Done** — explicit success checklist plus links to Drive doc, Gmail Sent, copy link, and download .docx
 
 ## Settings Page
 

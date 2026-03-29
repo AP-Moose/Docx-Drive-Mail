@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -8,26 +8,26 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import {
+  AlignLeft,
   ArrowLeft,
   ArrowRight,
-  Loader2,
-  Mic,
-  MicOff,
   CheckCircle2,
-  Scissors,
-  AlignLeft,
-  RotateCcw,
-  Upload,
-  Mail,
-  ExternalLink,
+  Circle,
   Copy,
+  ExternalLink,
+  Eye,
   FileDown,
   HardHat,
-  Send,
-  MessageSquare,
-  Eye,
+  Loader2,
+  Mail,
+  Mic,
+  MicOff,
   Pencil,
   Plus,
+  RotateCcw,
+  Scissors,
+  Send,
+  Upload,
   X,
 } from "lucide-react";
 import type { Proposal } from "@shared/schema";
@@ -43,35 +43,138 @@ interface FormData {
   mode: string;
 }
 
+interface FinalizeResult {
+  proposal: Proposal;
+  completion: {
+    proposalReady: boolean;
+    fileSaved: boolean;
+    emailSent: boolean;
+    nextStepComplete: boolean;
+  };
+  links: {
+    driveWebLink?: string;
+    gmailSentUrl?: string;
+  };
+}
+
+function parseApiError(error: unknown): { message: string; code?: string } {
+  const fallback = { message: "Something went wrong." };
+  if (!(error instanceof Error)) return fallback;
+
+  const raw = error.message.includes(": ") ? error.message.split(": ").slice(1).join(": ") : error.message;
+  try {
+    const parsed = JSON.parse(raw) as { error?: string; code?: string };
+    return {
+      message: parsed.error || error.message,
+      code: parsed.code,
+    };
+  } catch {
+    return { message: error.message };
+  }
+}
+
 function ProgressBar({ step }: { step: Step }) {
   const displaySteps = ["info", "scope", "review", "confirm", "done"];
-  const total = displaySteps.length;
-  let displayIndex = displaySteps.indexOf(step as any);
+  let displayIndex = displaySteps.indexOf(step);
   if (step === "generating") displayIndex = 2;
   if (step === "saving") displayIndex = 3;
-  const progress = ((Math.max(displayIndex, 0) + 1) / total) * 100;
+  const progress = ((Math.max(displayIndex, 0) + 1) / displaySteps.length) * 100;
 
   return (
-    <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
-      <div
-        className="bg-primary h-full rounded-full transition-all duration-500"
-        style={{ width: `${progress}%` }}
-      />
+    <div className="w-full rounded-full bg-white/20 p-0.5">
+      <div className="h-2 rounded-full bg-white/15">
+        <div
+          className="h-full rounded-full bg-white transition-all duration-500"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
     </div>
   );
 }
 
 function StepLabel({ step, mode }: { step: Step; mode: string }) {
   const labels: Record<Step, string> = {
-    info: "Step 1 of 5 — Customer Info",
-    scope: "Step 2 of 5 — Describe the Work",
-    generating: "Generating your proposal…",
-    review: "Step 3 of 5 — Review & Edit",
-    confirm: mode === "proposal_email" ? "Step 4 of 5 — Review Email & Send" : "Step 4 of 5 — Confirm & Upload",
-    saving: "Saving…",
-    done: "Step 5 of 5 — Done!",
+    info: "Step 1 of 5  Customer details",
+    scope: "Step 2 of 5  Describe the work",
+    generating: "Writing a customer-ready proposal",
+    review: "Step 3 of 5  Review the proposal",
+    confirm: mode === "proposal_email" ? "Step 4 of 5  Final send check" : "Step 4 of 5  Final save check",
+    saving: mode === "proposal_email" ? "Sending your proposal package" : "Saving your proposal package",
+    done: "Step 5 of 5  Completed",
   };
-  return <p className="text-sm text-muted-foreground mt-2">{labels[step]}</p>;
+
+  return <p className="mt-3 text-sm text-primary-foreground/80">{labels[step]}</p>;
+}
+
+function StageCard({
+  eyebrow,
+  title,
+  description,
+  statuses,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  statuses: string[];
+}) {
+  return (
+    <div className="space-y-6 rounded-[28px] border border-primary/15 bg-card px-6 py-8 shadow-[0_20px_60px_-30px_rgba(17,24,39,0.35)]">
+      <div className="space-y-3 text-center">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">{eyebrow}</p>
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-primary/15 bg-primary/10">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
+          <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      <div className="space-y-3 rounded-2xl bg-muted/55 p-4">
+        {statuses.map((status, index) => (
+          <div key={status} className="flex items-center gap-3 rounded-xl bg-background/75 px-4 py-3">
+            {index === 0 ? (
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            ) : (
+              <Circle className="h-4 w-4 text-muted-foreground/60" />
+            )}
+            <span className={index === 0 ? "text-sm font-medium text-foreground" : "text-sm text-muted-foreground"}>
+              {status}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SuccessRow({
+  active,
+  label,
+  detail,
+}: {
+  active: boolean;
+  label: string;
+  detail: string;
+}) {
+  return (
+    <div
+      className={`flex items-start gap-3 rounded-2xl border px-4 py-4 ${
+        active
+          ? "border-primary/20 bg-primary/5"
+          : "border-border bg-card"
+      }`}
+    >
+      {active ? (
+        <CheckCircle2 className="mt-0.5 h-5 w-5 text-primary" />
+      ) : (
+        <Circle className="mt-0.5 h-5 w-5 text-muted-foreground" />
+      )}
+      <div className="space-y-1">
+        <p className="text-sm font-semibold">{label}</p>
+        <p className="text-sm text-muted-foreground">{detail}</p>
+      </div>
+    </div>
+  );
 }
 
 export default function NewProposal() {
@@ -88,17 +191,19 @@ export default function NewProposal() {
   const [editedText, setEditedText] = useState("");
   const [editedEmailSubject, setEditedEmailSubject] = useState("");
   const [editedEmailBody, setEditedEmailBody] = useState("");
+  const [previewMode, setPreviewMode] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isChatListening, setIsChatListening] = useState(false);
   const [isChatTranscribing, setIsChatTranscribing] = useState(false);
-  const scopeRecorderRef = useRef<MediaRecorder | null>(null);
-  const chatRecorderRef = useRef<MediaRecorder | null>(null);
   const [chatInput, setChatInput] = useState("");
-  const chatInputRef = useRef<HTMLInputElement>(null);
-  const [previewMode, setPreviewMode] = useState(false);
   const [emailList, setEmailList] = useState<string[]>([]);
   const [emailInput, setEmailInput] = useState("");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [finalizeResult, setFinalizeResult] = useState<FinalizeResult | null>(null);
+
+  const scopeRecorderRef = useRef<MediaRecorder | null>(null);
+  const chatRecorderRef = useRef<MediaRecorder | null>(null);
 
   const [form, setForm] = useState<FormData>({
     customerName: "",
@@ -108,6 +213,10 @@ export default function NewProposal() {
     mode: initialMode,
   });
 
+  function update(field: keyof FormData, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
   async function transcribeBlob(blob: Blob): Promise<string | null> {
     try {
       const res = await fetch("/api/transcribe", {
@@ -115,11 +224,12 @@ export default function NewProposal() {
         headers: { "Content-Type": blob.type || "audio/webm" },
         body: blob,
       });
-      const data = await res.json() as { transcript?: string; error?: string };
+      const data = (await res.json()) as { transcript?: string; error?: string };
       if (!res.ok || data.error) throw new Error(data.error || "Transcription failed");
       return data.transcript ?? null;
-    } catch (e: any) {
-      toast({ title: "Transcription failed", description: e.message, variant: "destructive" });
+    } catch (error) {
+      const parsed = parseApiError(error);
+      toast({ title: "Transcription failed", description: parsed.message, variant: "destructive" });
       return null;
     }
   }
@@ -130,25 +240,38 @@ export default function NewProposal() {
       setIsListening(false);
       return;
     }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const rec = new MediaRecorder(stream);
+      const recorder = new MediaRecorder(stream);
       const chunks: BlobPart[] = [];
-      rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-      rec.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
         setIsListening(false);
         setIsTranscribing(true);
-        const blob = new Blob(chunks, { type: "audio/webm" });
-        const transcript = await transcribeBlob(blob);
-        if (transcript) setForm((f) => ({ ...f, scopeNotes: transcript }));
+        const transcript = await transcribeBlob(new Blob(chunks, { type: "audio/webm" }));
+        if (transcript) {
+          setForm((current) => ({
+            ...current,
+            scopeNotes: current.scopeNotes ? `${current.scopeNotes.trim()}\n${transcript}` : transcript,
+          }));
+        }
         setIsTranscribing(false);
       };
-      scopeRecorderRef.current = rec;
-      rec.start();
+
+      scopeRecorderRef.current = recorder;
+      recorder.start();
       setIsListening(true);
     } catch {
-      toast({ title: "Microphone access denied", description: "Allow microphone access to use voice", variant: "destructive" });
+      toast({
+        title: "Microphone access denied",
+        description: "Allow microphone access to capture the job details by voice.",
+        variant: "destructive",
+      });
     }
   }
 
@@ -158,45 +281,52 @@ export default function NewProposal() {
       setIsChatListening(false);
       return;
     }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const rec = new MediaRecorder(stream);
+      const recorder = new MediaRecorder(stream);
       const chunks: BlobPart[] = [];
-      rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-      rec.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
         setIsChatListening(false);
         setIsChatTranscribing(true);
-        const blob = new Blob(chunks, { type: "audio/webm" });
-        const transcript = await transcribeBlob(blob);
+        const transcript = await transcribeBlob(new Blob(chunks, { type: "audio/webm" }));
         if (transcript) setChatInput(transcript);
         setIsChatTranscribing(false);
       };
-      chatRecorderRef.current = rec;
-      rec.start();
+
+      chatRecorderRef.current = recorder;
+      recorder.start();
       setIsChatListening(true);
     } catch {
-      toast({ title: "Microphone access denied", description: "Allow microphone access to use voice", variant: "destructive" });
+      toast({
+        title: "Microphone access denied",
+        description: "Allow microphone access to dictate a refinement note.",
+        variant: "destructive",
+      });
     }
-  }
-
-  function update(field: keyof FormData, value: string) {
-    setForm((f) => ({ ...f, [field]: value }));
   }
 
   function addEmail() {
     const email = emailInput.trim().replace(/,+$/, "").trim();
     if (!email) return;
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      toast({ title: "Invalid email", description: "Please enter a valid email address", variant: "destructive" });
+      toast({ title: "Invalid email", description: "Enter a valid recipient email.", variant: "destructive" });
       return;
     }
+
     if (emailList.includes(email)) {
-      toast({ title: "Duplicate", description: "This email is already added", variant: "destructive" });
+      toast({ title: "Already added", description: "That email is already on the recipient list.", variant: "destructive" });
       setEmailInput("");
       return;
     }
+
     const next = [...emailList, email];
     setEmailList(next);
     update("customerEmail", next.join(", "));
@@ -213,32 +343,35 @@ export default function NewProposal() {
         scopeNotes: form.scopeNotes,
         mode: form.mode,
       });
-      return res.json() as Promise<Proposal>;
+      return (await res.json()) as Proposal;
     },
-    onSuccess: async (p) => {
-      setProposalId(p.id);
+    onSuccess: (created) => {
+      setProposalId(created.id);
+      setSubmitError(null);
       setStep("generating");
-      generateMutation.mutate(p.id);
+      generateMutation.mutate(created.id);
     },
-    onError: (e: any) => {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+    onError: (error) => {
+      const parsed = parseApiError(error);
+      toast({ title: "Could not start proposal", description: parsed.message, variant: "destructive" });
     },
   });
 
   const generateMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await apiRequest("POST", `/api/proposals/${id}/generate`);
-      return res.json() as Promise<Proposal>;
+      return (await res.json()) as Proposal;
     },
-    onSuccess: (p) => {
-      setProposal(p);
-      setEditedText(p.proposalText || "");
-      setEditedEmailSubject(p.emailSubject || "");
-      setEditedEmailBody(p.emailBody || "");
+    onSuccess: (generated) => {
+      setProposal(generated);
+      setEditedText(generated.proposalText || "");
+      setEditedEmailSubject(generated.emailSubject || "");
+      setEditedEmailBody(generated.emailBody || "");
       setStep("review");
     },
-    onError: (e: any) => {
-      toast({ title: "AI generation failed", description: e.message, variant: "destructive" });
+    onError: (error) => {
+      const parsed = parseApiError(error);
+      toast({ title: "AI generation failed", description: parsed.message, variant: "destructive" });
       setStep("scope");
     },
   });
@@ -250,24 +383,29 @@ export default function NewProposal() {
         emailSubject: editedEmailSubject,
         emailBody: editedEmailBody,
       });
-      return res.json() as Promise<Proposal>;
+      return (await res.json()) as Proposal;
     },
-    onSuccess: (p) => setProposal(p),
+    onSuccess: (saved) => setProposal(saved),
+    onError: (error) => {
+      const parsed = parseApiError(error);
+      toast({ title: "Could not save edits", description: parsed.message, variant: "destructive" });
+    },
   });
 
   const refineMutation = useMutation({
     mutationFn: async (instruction: string) => {
       await apiRequest("PATCH", `/api/proposals/${proposalId}`, { proposalText: editedText });
       const res = await apiRequest("POST", `/api/proposals/${proposalId}/refine`, { instruction });
-      return res.json() as Promise<Proposal>;
+      return (await res.json()) as Proposal;
     },
-    onSuccess: (p) => {
-      setProposal(p);
-      setEditedText(p.proposalText || "");
+    onSuccess: (refined) => {
+      setProposal(refined);
+      setEditedText(refined.proposalText || "");
       setChatInput("");
     },
-    onError: (e: any) => {
-      toast({ title: "Refinement failed", description: e.message, variant: "destructive" });
+    onError: (error) => {
+      const parsed = parseApiError(error);
+      toast({ title: "Refinement failed", description: parsed.message, variant: "destructive" });
     },
   });
 
@@ -279,38 +417,38 @@ export default function NewProposal() {
         emailBody: editedEmailBody,
       });
       const res = await apiRequest("POST", `/api/proposals/${proposalId}/finalize`);
-      return res.json() as Promise<{ fileId: string; webViewLink: string; gmailDraftId?: string; proposal: Proposal }>;
+      return (await res.json()) as FinalizeResult;
     },
-    onSuccess: (data) => {
-      setProposal(data.proposal);
+    onSuccess: (result) => {
+      setProposal(result.proposal);
+      setFinalizeResult(result);
+      setSubmitError(null);
       setStep("done");
       qc.invalidateQueries({ queryKey: ["/api/proposals"] });
     },
-    onError: (e: any) => {
-      const code = (e as any).code;
-      if (code === "DRIVE_NOT_CONNECTED" || code === "GMAIL_NOT_CONNECTED") {
-        toast({
-          title: "Google not connected",
-          description: "Please connect your Google account first.",
-          variant: "destructive",
-        });
-      } else {
-        toast({ title: "Save failed", description: e.message, variant: "destructive" });
-      }
+    onError: (error) => {
+      const parsed = parseApiError(error);
+      const description =
+        parsed.code === "DRIVE_NOT_CONNECTED" || parsed.code === "GMAIL_NOT_CONNECTED"
+          ? "Finish the required Google connection first, then try again."
+          : parsed.message;
+
+      setSubmitError(description);
       setStep("confirm");
+      toast({ title: "Could not finish proposal", description, variant: "destructive" });
     },
   });
 
   function handleChatSubmit() {
-    const msg = chatInput.trim();
-    if (!msg) return;
-    refineMutation.mutate(msg);
+    const instruction = chatInput.trim();
+    if (!instruction) return;
+    refineMutation.mutate(instruction);
   }
 
   function handleNext() {
     if (step === "info") {
       if (!form.customerName.trim()) {
-        toast({ title: "Required", description: "Please enter the customer name", variant: "destructive" });
+        toast({ title: "Customer name required", description: "Add the customer name before moving on.", variant: "destructive" });
         return;
       }
       if (form.mode === "proposal_email" && emailList.length === 0) {
@@ -318,30 +456,41 @@ export default function NewProposal() {
           addEmail();
           return;
         }
-        toast({ title: "Required", description: "Add at least one customer email for email mode", variant: "destructive" });
+        toast({ title: "Recipient required", description: "Add at least one email recipient.", variant: "destructive" });
         return;
       }
       setStep("scope");
-    } else if (step === "scope") {
+      return;
+    }
+
+    if (step === "scope") {
       if (!form.scopeNotes.trim()) {
-        toast({ title: "Required", description: "Please describe the project scope", variant: "destructive" });
+        toast({ title: "Describe the work", description: "Add the job details before generating the proposal.", variant: "destructive" });
         return;
       }
       createMutation.mutate();
-    } else if (step === "review") {
+      return;
+    }
+
+    if (step === "review") {
       saveMutation.mutate();
+      setSubmitError(null);
       setStep("confirm");
-    } else if (step === "confirm") {
+      return;
+    }
+
+    if (step === "confirm") {
+      setSubmitError(null);
       setStep("saving");
       finalizeMutation.mutate();
     }
   }
 
   function copyLink() {
-    if (proposal?.driveWebLink) {
-      navigator.clipboard.writeText(proposal.driveWebLink);
-      toast({ title: "Link copied!" });
-    }
+    const link = finalizeResult?.links.driveWebLink || proposal?.driveWebLink;
+    if (!link) return;
+    navigator.clipboard.writeText(link);
+    toast({ title: "Link copied", description: "The shareable proposal link is on your clipboard." });
   }
 
   const isLoading =
@@ -350,532 +499,589 @@ export default function NewProposal() {
     refineMutation.isPending ||
     finalizeMutation.isPending;
 
+  const doneState = finalizeResult?.completion;
+
   return (
-    <div className="min-h-screen bg-background flex flex-col max-w-2xl mx-auto">
-      <div className="bg-primary px-5 pt-10 pb-5 text-primary-foreground">
-        <div className="flex items-center gap-3 mb-3">
-          {step !== "done" && (
-            <button onClick={() => navigate("/")} className="text-primary-foreground/80">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-          )}
-          <div className="flex items-center gap-2 flex-1">
-            <HardHat className="w-5 h-5" />
-            <span className="font-semibold">
-              {form.mode === "proposal_email" ? "New Proposal" : "Proposal Only"}
-            </span>
-          </div>
-        </div>
-        <ProgressBar step={step} />
-        <StepLabel step={step} mode={form.mode} />
-      </div>
-
-      <div className="flex-1 px-5 py-6">
-
-        {step === "info" && (
-          <div className="space-y-5">
-            <div>
-              <Label htmlFor="customerName" className="text-base font-medium">
-                Customer Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="customerName"
-                data-testid="input-customer-name"
-                className="mt-1.5 h-12 text-base"
-                placeholder="John Smith"
-                value={form.customerName}
-                onChange={(e) => update("customerName", e.target.value)}
-              />
-            </div>
-
-            {form.mode === "proposal_email" && (
-              <div>
-                <Label className="text-base font-medium">
-                  Customer Email(s) <span className="text-destructive">*</span>
-                </Label>
-                <div className="mt-1.5 space-y-2">
-                  {emailList.map((email, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
-                      <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="flex-1 text-sm truncate" data-testid={`text-email-${i}`}>{email}</span>
-                      <button
-                        type="button"
-                        data-testid={`button-remove-email-${i}`}
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={() => {
-                          const next = emailList.filter((_, idx) => idx !== i);
-                          setEmailList(next);
-                          update("customerEmail", next.join(", "));
-                        }}
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                  <div className="flex gap-2">
-                    <Input
-                      data-testid="input-customer-email"
-                      type="email"
-                      className="flex-1 h-12 text-base"
-                      placeholder={emailList.length === 0 ? "john@email.com" : "Add another email…"}
-                      value={emailInput}
-                      onChange={(e) => setEmailInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if ((e.key === "Enter" || e.key === ",") && emailInput.trim()) {
-                          e.preventDefault();
-                          addEmail();
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-12 px-3"
-                      data-testid="button-add-email"
-                      onClick={addEmail}
-                      disabled={!emailInput.trim()}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  {emailList.length > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      {emailList.length} recipient{emailList.length > 1 ? "s" : ""}
-                    </p>
-                  )}
-                </div>
-              </div>
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f7f8f6_0%,#ffffff_22%,#ffffff_100%)]">
+      <div className="mx-auto flex min-h-screen max-w-2xl flex-col">
+        <div className="bg-primary px-5 pb-6 pt-10 text-primary-foreground">
+          <div className="mb-4 flex items-center gap-3">
+            {step !== "done" && (
+              <button onClick={() => navigate("/")} className="rounded-full p-1 text-primary-foreground/80 transition-colors hover:text-primary-foreground">
+                <ArrowLeft className="h-5 w-5" />
+              </button>
             )}
-
-            <div>
-              <Label htmlFor="jobAddress" className="text-base font-medium">Job Address</Label>
-              <Input
-                id="jobAddress"
-                data-testid="input-job-address"
-                className="mt-1.5 h-12 text-base"
-                placeholder="123 Main St, Anytown"
-                value={form.jobAddress}
-                onChange={(e) => update("jobAddress", e.target.value)}
-              />
-            </div>
-          </div>
-        )}
-
-        {step === "scope" && (
-          <div className="space-y-5">
-            <div className="text-center space-y-2">
-              <p className="text-base font-medium">What work are you doing?</p>
-              <p className="text-sm text-muted-foreground">
-                Describe the job in your own words — materials, scope, price, timeline.
-                The AI will figure out the rest.
-              </p>
-            </div>
-
-            <button
-              data-testid="button-voice"
-              type="button"
-              onClick={toggleVoice}
-              disabled={isTranscribing}
-              className={`w-full flex flex-col items-center justify-center gap-3 rounded-2xl p-8 transition-all active:scale-[0.97] disabled:opacity-60 disabled:pointer-events-none ${
-                isListening
-                  ? "bg-red-500 text-white shadow-lg shadow-red-500/25"
-                  : isTranscribing
-                  ? "bg-primary/20 text-primary border-2 border-primary/40"
-                  : "bg-primary/10 text-primary border-2 border-dashed border-primary/30"
-              }`}
-            >
-              {isTranscribing ? (
-                <Loader2 className="w-10 h-10 animate-spin" />
-              ) : isListening ? (
-                <MicOff className="w-10 h-10" />
-              ) : (
-                <Mic className="w-10 h-10" />
-              )}
-              <span className="text-lg font-semibold">
-                {isTranscribing ? "Transcribing…" : isListening ? "Tap to Stop Recording" : "Tap to Record"}
+            <div className="flex items-center gap-2">
+              <HardHat className="h-5 w-5" />
+              <span className="text-sm font-semibold uppercase tracking-[0.2em]">
+                {form.mode === "proposal_email" ? "Proposal + Send" : "Proposal Only"}
               </span>
-              {!isListening && !isTranscribing && (
-                <span className="text-sm opacity-70">Describe the job — Whisper will transcribe</span>
-              )}
-              {isListening && (
-                <span className="text-sm opacity-80 animate-pulse">Recording…</span>
-              )}
-            </button>
-
-            <div className="relative">
-              <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide font-medium">
-                Or type it out:
-              </p>
-              <Textarea
-                data-testid="textarea-scope"
-                className="text-base min-h-[180px] resize-none"
-                placeholder="Example: Tear out old deck, build new 16x20 composite deck with aluminum railing. Customer wants Trex Enhance in Toasted Sand. Price around $18,000, should take about 3 weeks."
-                value={form.scopeNotes}
-                onChange={(e) => update("scopeNotes", e.target.value)}
-              />
             </div>
           </div>
-        )}
+          <ProgressBar step={step} />
+          <StepLabel step={step} mode={form.mode} />
+        </div>
 
-        {step === "generating" && (
-          <div className="flex flex-col items-center justify-center py-16 space-y-5">
-            <div className="bg-primary/10 rounded-full p-6">
-              <Loader2 className="w-10 h-10 text-primary animate-spin" />
-            </div>
-            <div className="text-center">
-              <h2 className="text-xl font-semibold">Creating Your Proposal</h2>
-              <p className="text-muted-foreground mt-2 text-sm px-4">
-                AI is writing a professional proposal based on your notes…
-              </p>
-            </div>
-          </div>
-        )}
-
-        {step === "review" && proposal && (
-          <div className="space-y-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-bold">{proposal.proposalTitle}</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {proposal.customerName}
-                  {proposal.jobAddress ? ` · ${proposal.jobAddress}` : ""}
+        <div className="flex-1 px-5 py-6">
+          {step === "info" && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Start the proposal</p>
+                <h1 className="text-3xl font-semibold tracking-tight">Capture the customer basics first.</h1>
+                <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+                  Keep this quick. Name, recipient, and address are all you need before the app turns the job details into a polished proposal.
                 </p>
               </div>
-              <Button
-                data-testid="button-toggle-preview"
-                variant="outline"
-                size="sm"
-                className="shrink-0 gap-1.5"
-                onClick={() => setPreviewMode(!previewMode)}
-              >
-                {previewMode ? (
-                  <>
-                    <Pencil className="w-3.5 h-3.5" />
-                    Edit
-                  </>
-                ) : (
-                  <>
-                    <Eye className="w-3.5 h-3.5" />
-                    Preview
-                  </>
-                )}
-              </Button>
-            </div>
 
-            {previewMode ? (
-              <ProposalPreview
-                title={proposal.proposalTitle || undefined}
-                text={editedText}
-                customerName={proposal.customerName}
-                customerEmail={proposal.customerEmail || undefined}
-                jobAddress={proposal.jobAddress || undefined}
-                className="max-h-[400px]"
-              />
-            ) : (
-              <Textarea
-                data-testid="textarea-proposal"
-                className="text-sm min-h-[300px] font-mono leading-relaxed resize-none"
-                value={editedText}
-                onChange={(e) => setEditedText(e.target.value)}
-              />
-            )}
-
-            <div>
-              <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">
-                Quick adjustments:
-              </p>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  data-testid="button-make-shorter"
-                  variant="secondary"
-                  size="sm"
-                  className="gap-1"
-                  disabled={refineMutation.isPending}
-                  onClick={() => refineMutation.mutate("shorter")}
-                >
-                  <Scissors className="w-3.5 h-3.5" />
-                  Shorter
-                </Button>
-                <Button
-                  data-testid="button-make-longer"
-                  variant="secondary"
-                  size="sm"
-                  className="gap-1"
-                  disabled={refineMutation.isPending}
-                  onClick={() => refineMutation.mutate("longer")}
-                >
-                  <AlignLeft className="w-3.5 h-3.5" />
-                  Longer
-                </Button>
-                <Button
-                  data-testid="button-regenerate"
-                  variant="secondary"
-                  size="sm"
-                  className="gap-1"
-                  disabled={refineMutation.isPending}
-                  onClick={() => refineMutation.mutate("regenerate")}
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Redo
-                </Button>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">
-                Tell AI what to change:
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  ref={chatInputRef}
-                  data-testid="input-chat-refine"
-                  className="flex-1 h-10 text-sm"
-                  placeholder={isChatListening ? "Listening…" : isChatTranscribing ? "Transcribing…" : 'e.g. "Change price to $10,000"'}
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && chatInput.trim()) handleChatSubmit();
-                  }}
-                  disabled={refineMutation.isPending}
-                />
-                <Button
-                  data-testid="button-chat-voice"
-                  variant={isChatListening ? "destructive" : "secondary"}
-                  size="sm"
-                  className="h-10 px-3"
-                  onClick={toggleChatVoice}
-                  disabled={refineMutation.isPending || isChatTranscribing}
-                >
-                  {isChatTranscribing ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : isChatListening ? (
-                    <MicOff className="w-4 h-4" />
-                  ) : (
-                    <Mic className="w-4 h-4" />
-                  )}
-                </Button>
-                <Button
-                  data-testid="button-chat-send"
-                  size="sm"
-                  className="h-10 px-3"
-                  onClick={handleChatSubmit}
-                  disabled={refineMutation.isPending || !chatInput.trim()}
-                >
-                  {refineMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Send className="w-4 h-4" />
-                  )}
-                </Button>
-              </div>
-              {isChatListening && (
-                <p className="text-sm text-primary mt-2 flex items-center gap-2 animate-pulse">
-                  <Mic className="w-3.5 h-3.5" />
-                  Listening — tap mic to stop, then send
-                </p>
-              )}
-              {isChatTranscribing && (
-                <p className="text-sm text-primary mt-2 flex items-center gap-2">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Transcribing…
-                </p>
-              )}
-              {refineMutation.isPending && (
-                <p className="text-sm text-muted-foreground mt-2 flex items-center gap-2">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Rewriting…
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {step === "confirm" && proposal && (
-          <div className="space-y-5">
-            <h2 className="text-lg font-bold">Review Before Sending</h2>
-
-            <ProposalPreview
-              title={proposal.proposalTitle || undefined}
-              text={editedText}
-              customerName={proposal.customerName}
-              customerEmail={proposal.customerEmail || undefined}
-              jobAddress={proposal.jobAddress || undefined}
-              className="max-h-[300px]"
-            />
-
-            {form.mode === "proposal_email" && (
-              <div className="space-y-4">
+              <div className="space-y-5 rounded-[28px] border border-border/80 bg-card px-5 py-6 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.25)]">
                 <div>
-                  <Label htmlFor="emailSubject" className="text-sm font-medium">Email Subject</Label>
+                  <Label htmlFor="customerName" className="text-base font-medium">
+                    Customer name <span className="text-destructive">*</span>
+                  </Label>
                   <Input
-                    id="emailSubject"
-                    data-testid="input-email-subject"
-                    className="mt-1 h-10 text-sm"
-                    value={editedEmailSubject}
-                    onChange={(e) => setEditedEmailSubject(e.target.value)}
+                    id="customerName"
+                    data-testid="input-customer-name"
+                    className="mt-2 h-[52px] rounded-2xl border-border/80 text-base"
+                    placeholder="John Smith"
+                    value={form.customerName}
+                    onChange={(event) => update("customerName", event.target.value)}
                   />
                 </div>
+
+                {form.mode === "proposal_email" && (
+                  <div className="space-y-3">
+                    <Label className="text-base font-medium">
+                      Recipient email <span className="text-destructive">*</span>
+                    </Label>
+                    {emailList.length > 0 && (
+                      <div className="space-y-2">
+                        {emailList.map((email, index) => (
+                          <div key={email} className="flex items-center gap-3 rounded-2xl border border-border/80 bg-background px-4 py-3">
+                            <Mail className="h-4 w-4 text-primary" />
+                            <span className="flex-1 truncate text-sm" data-testid={`text-email-${index}`}>{email}</span>
+                            <button
+                              type="button"
+                              data-testid={`button-remove-email-${index}`}
+                              className="rounded-full p-1 text-muted-foreground transition-colors hover:text-destructive"
+                              onClick={() => {
+                                const next = emailList.filter((_, emailIndex) => emailIndex !== index);
+                                setEmailList(next);
+                                update("customerEmail", next.join(", "));
+                              }}
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <Input
+                        data-testid="input-customer-email"
+                        type="email"
+                        className="h-[52px] flex-1 rounded-2xl border-border/80 text-base"
+                        placeholder={emailList.length === 0 ? "john@email.com" : "Add another email"}
+                        value={emailInput}
+                        onChange={(event) => setEmailInput(event.target.value)}
+                        onKeyDown={(event) => {
+                          if ((event.key === "Enter" || event.key === ",") && emailInput.trim()) {
+                            event.preventDefault();
+                            addEmail();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-[52px] rounded-2xl px-4"
+                        data-testid="button-add-email"
+                        onClick={addEmail}
+                        disabled={!emailInput.trim()}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {emailList.length > 0 ? `${emailList.length} recipient${emailList.length > 1 ? "s" : ""} ready for send.` : "Add the customer email now so the final send step is one tap."}
+                    </p>
+                  </div>
+                )}
 
                 <div>
-                  <Label htmlFor="emailBody" className="text-sm font-medium">Email Body</Label>
-                  <Textarea
-                    id="emailBody"
-                    data-testid="textarea-email-body"
-                    className="mt-1 text-sm min-h-[120px] resize-none"
-                    value={editedEmailBody}
-                    onChange={(e) => setEditedEmailBody(e.target.value)}
+                  <Label htmlFor="jobAddress" className="text-base font-medium">Job address</Label>
+                  <Input
+                    id="jobAddress"
+                    data-testid="input-job-address"
+                    className="mt-2 h-[52px] rounded-2xl border-border/80 text-base"
+                    placeholder="123 Main St, Anytown"
+                    value={form.jobAddress}
+                    onChange={(event) => update("jobAddress", event.target.value)}
                   />
                 </div>
+              </div>
+            </div>
+          )}
 
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-2">
-                    This will send the email directly to:
-                  </p>
-                  <div className="space-y-1">
-                    {emailList.map((email, i) => (
-                      <p key={i} className="text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
-                        <Mail className="w-3.5 h-3.5" />
-                        <span data-testid={`confirm-email-${i}`}>{email}</span>
+          {step === "scope" && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Describe the work</p>
+                <h1 className="text-3xl font-semibold tracking-tight">Talk like you would on the jobsite.</h1>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Include materials, measurements, price, timing, or anything the customer should see in the finished proposal. Voice is primary. Typing stays fully supported.
+                </p>
+              </div>
+
+              <button
+                data-testid="button-voice"
+                type="button"
+                onClick={toggleVoice}
+                disabled={isTranscribing}
+                className={`w-full rounded-[32px] border px-6 py-8 text-left transition-all active:scale-[0.99] ${
+                  isListening
+                    ? "border-red-400 bg-red-500 text-white shadow-[0_24px_60px_-30px_rgba(239,68,68,0.6)]"
+                    : isTranscribing
+                    ? "border-primary/30 bg-primary/10 text-primary"
+                    : "border-primary/20 bg-[linear-gradient(180deg,rgba(22,163,74,0.10),rgba(255,255,255,0.96))] text-foreground shadow-[0_24px_60px_-35px_rgba(22,163,74,0.35)]"
+                }`}
+              >
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-2">
+                      <p className={`text-xs font-semibold uppercase tracking-[0.28em] ${isListening ? "text-white/75" : "text-primary/70"}`}>
+                        Voice capture
                       </p>
-                    ))}
+                      <h2 className="text-2xl font-semibold tracking-tight">
+                        {isTranscribing ? "Turning your recording into notes" : isListening ? "Recording the job details now" : "Tap once and describe the scope"}
+                      </h2>
+                    </div>
+                    <div className={`flex h-16 w-16 items-center justify-center rounded-full ${isListening ? "bg-white/15" : "bg-primary/10"}`}>
+                      {isTranscribing ? (
+                        <Loader2 className="h-7 w-7 animate-spin" />
+                      ) : isListening ? (
+                        <MicOff className="h-7 w-7" />
+                      ) : (
+                        <Mic className="h-7 w-7 text-primary" />
+                      )}
+                    </div>
+                  </div>
+                  <div className={`rounded-2xl border px-4 py-4 ${isListening ? "border-white/15 bg-white/10" : "border-primary/10 bg-background/75"}`}>
+                    <p className="text-sm leading-6">
+                      {isTranscribing
+                        ? "Please wait while the recording is transcribed and added to the project description."
+                        : isListening
+                        ? "Tap again when you finish. The transcript will be appended to the scope notes below."
+                        : "Example: replace the old deck with a new 16x20 composite deck, black aluminum railings, Trex boards, around $18,000, completed in three weeks."}
+                    </p>
                   </div>
                 </div>
+              </button>
+
+              <div className="space-y-3 rounded-[28px] border border-border/80 bg-card px-5 py-5">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Typed notes</p>
+                  <p className="text-sm text-muted-foreground">Use this if you prefer to type, or to tighten the transcript before you continue.</p>
+                </div>
+                <Textarea
+                  data-testid="textarea-scope"
+                  className="min-h-[240px] rounded-[24px] border-border/80 bg-background text-base leading-7 resize-none"
+                  placeholder="Describe the project, materials, timeline, price range, and anything that should sound polished and clear for the customer."
+                  value={form.scopeNotes}
+                  onChange={(event) => update("scopeNotes", event.target.value)}
+                />
               </div>
-            )}
-          </div>
-        )}
-
-        {step === "saving" && (
-          <div className="flex flex-col items-center justify-center py-16 space-y-5">
-            <div className="bg-primary/10 rounded-full p-6">
-              <Loader2 className="w-10 h-10 text-primary animate-spin" />
             </div>
-            <div className="text-center">
-              <h2 className="text-xl font-semibold">
-                {form.mode === "proposal_email" ? "Sending…" : "Uploading…"}
-              </h2>
-              <p className="text-muted-foreground mt-2 text-sm px-4">
-                Generating Word doc, uploading to Drive
-                {form.mode === "proposal_email" ? ", and sending email…" : "…"}
-              </p>
-            </div>
-          </div>
-        )}
+          )}
 
-        {step === "done" && proposal && (
-          <div className="space-y-5">
-            <div className="flex flex-col items-center text-center py-6 space-y-3">
-              <div className="bg-green-100 dark:bg-green-900/30 rounded-full p-4">
-                <CheckCircle2 className="w-10 h-10 text-green-600 dark:text-green-400" />
-              </div>
-              <h2 className="text-2xl font-bold">All Done!</h2>
-              <p className="text-muted-foreground text-sm">
-                Your proposal has been saved to Google Drive
-                {proposal.gmailDraftId ? " and emailed to the customer." : "."}
-              </p>
-            </div>
+          {step === "generating" && (
+            <StageCard
+              eyebrow="Preparing the document"
+              title="Building the proposal draft"
+              description="The app is translating your field notes into a clean customer-ready proposal with a matching email."
+              statuses={[
+                "Writing the proposal language",
+                "Organizing sections and pricing details",
+                "Preparing the send-ready document",
+              ]}
+            />
+          )}
 
-            <div className="space-y-3">
-              {proposal.driveWebLink && (
-                <a
-                  href={proposal.driveWebLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  data-testid="link-drive"
-                  className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4 active:bg-muted transition-colors"
+          {step === "review" && proposal && (
+            <div className="space-y-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Proposal review</p>
+                  <h1 className="text-3xl font-semibold tracking-tight">{proposal.proposalTitle}</h1>
+                  <p className="text-sm text-muted-foreground">
+                    {proposal.customerName}
+                    {proposal.jobAddress ? `  ·  ${proposal.jobAddress}` : ""}
+                  </p>
+                </div>
+                <Button
+                  data-testid="button-toggle-preview"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full px-4"
+                  onClick={() => setPreviewMode((current) => !current)}
                 >
-                  <ExternalLink className="w-5 h-5 text-green-600" />
-                  <span className="font-medium flex-1">Open in Google Drive</span>
-                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
-                </a>
+                  {previewMode ? (
+                    <>
+                      <Pencil className="mr-2 h-3.5 w-3.5" />
+                      Edit text
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="mr-2 h-3.5 w-3.5" />
+                      Preview document
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {previewMode ? (
+                <ProposalPreview
+                  title={proposal.proposalTitle || undefined}
+                  text={editedText}
+                  customerName={proposal.customerName}
+                  customerEmail={proposal.customerEmail || undefined}
+                  jobAddress={proposal.jobAddress || undefined}
+                  className="max-h-[480px]"
+                />
+              ) : (
+                <Textarea
+                  data-testid="textarea-proposal"
+                  className="min-h-[360px] rounded-[28px] border-border/80 bg-card px-5 py-5 font-mono text-sm leading-7 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.28)] resize-none"
+                  value={editedText}
+                  onChange={(event) => setEditedText(event.target.value)}
+                />
               )}
 
-              {proposal.gmailDraftId && (
-                <a
-                  href="https://mail.google.com/mail/#sent"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  data-testid="link-gmail"
-                  className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4 active:bg-muted transition-colors"
-                >
-                  <Mail className="w-5 h-5 text-green-500" />
-                  <span className="font-medium flex-1">Email Sent</span>
-                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
-                </a>
+              <div className="space-y-4 rounded-[28px] border border-border/80 bg-card px-5 py-5">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Quick changes</p>
+                  <p className="text-sm text-muted-foreground">Make a fast structural adjustment or tell the AI exactly what to change.</p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    data-testid="button-make-shorter"
+                    variant="secondary"
+                    className="rounded-2xl"
+                    disabled={refineMutation.isPending}
+                    onClick={() => refineMutation.mutate("shorter")}
+                  >
+                    <Scissors className="mr-2 h-4 w-4" />
+                    Shorter
+                  </Button>
+                  <Button
+                    data-testid="button-make-longer"
+                    variant="secondary"
+                    className="rounded-2xl"
+                    disabled={refineMutation.isPending}
+                    onClick={() => refineMutation.mutate("longer")}
+                  >
+                    <AlignLeft className="mr-2 h-4 w-4" />
+                    Longer
+                  </Button>
+                  <Button
+                    data-testid="button-regenerate"
+                    variant="secondary"
+                    className="rounded-2xl"
+                    disabled={refineMutation.isPending}
+                    onClick={() => refineMutation.mutate("regenerate")}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Redo
+                  </Button>
+                </div>
+
+                <div className="flex gap-2">
+                  <Input
+                    data-testid="input-chat-refine"
+                    className="h-12 rounded-2xl"
+                    placeholder={
+                      isChatListening
+                        ? "Listening…"
+                        : isChatTranscribing
+                        ? "Transcribing…"
+                        : 'Example: shorten the opening and make the timeline more confident'
+                    }
+                    value={chatInput}
+                    onChange={(event) => setChatInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && chatInput.trim()) handleChatSubmit();
+                    }}
+                    disabled={refineMutation.isPending}
+                  />
+                  <Button
+                    data-testid="button-chat-voice"
+                    variant={isChatListening ? "destructive" : "secondary"}
+                    className="h-12 rounded-2xl px-4"
+                    onClick={toggleChatVoice}
+                    disabled={refineMutation.isPending || isChatTranscribing}
+                  >
+                    {isChatTranscribing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : isChatListening ? (
+                      <MicOff className="h-4 w-4" />
+                    ) : (
+                      <Mic className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    data-testid="button-chat-send"
+                    className="h-12 rounded-2xl px-4"
+                    onClick={handleChatSubmit}
+                    disabled={refineMutation.isPending || !chatInput.trim()}
+                  >
+                    {refineMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                </div>
+
+                {(isChatListening || isChatTranscribing || refineMutation.isPending) && (
+                  <p className="text-sm text-muted-foreground">
+                    {isChatListening && "Listening now. Tap the mic again when you finish speaking."}
+                    {isChatTranscribing && " Turning your voice note into a refinement request."}
+                    {refineMutation.isPending && " Rewriting the proposal with your latest instruction."}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {step === "confirm" && proposal && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Final confidence check</p>
+                <h1 className="text-3xl font-semibold tracking-tight">
+                  {form.mode === "proposal_email" ? "Confirm the send package." : "Confirm the saved proposal."}
+                </h1>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Review the customer-facing document and, if you are sending email, the exact message the customer will receive.
+                </p>
+              </div>
+
+              {submitError && (
+                <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-4 text-sm text-destructive">
+                  {submitError}
+                </div>
               )}
 
-              {proposal.driveWebLink && (
+              <div className="space-y-4 rounded-[28px] border border-border/80 bg-card px-5 py-5">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Proposal document</p>
+                  <p className="text-sm text-muted-foreground">This is the exact document that will be saved and shared.</p>
+                </div>
+                <ProposalPreview
+                  title={proposal.proposalTitle || undefined}
+                  text={editedText}
+                  customerName={proposal.customerName}
+                  customerEmail={proposal.customerEmail || undefined}
+                  jobAddress={proposal.jobAddress || undefined}
+                  className="max-h-[360px]"
+                />
+              </div>
+
+              {form.mode === "proposal_email" && (
+                <div className="space-y-4 rounded-[28px] border border-border/80 bg-card px-5 py-5">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Outgoing email</p>
+                    <p className="text-sm text-muted-foreground">Make sure the message feels clean and trustworthy before it goes out.</p>
+                  </div>
+
+                  <div className="space-y-3 rounded-2xl bg-muted/55 p-4">
+                    <p className="text-sm font-semibold">Recipients</p>
+                    <div className="space-y-2">
+                      {emailList.map((email, index) => (
+                        <div key={email} className="flex items-center gap-3 rounded-xl bg-background px-4 py-3 text-sm">
+                          <Mail className="h-4 w-4 text-primary" />
+                          <span data-testid={`confirm-email-${index}`}>{email}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="emailSubject" className="text-sm font-medium">Subject line</Label>
+                    <Input
+                      id="emailSubject"
+                      data-testid="input-email-subject"
+                      className="mt-2 h-12 rounded-2xl"
+                      value={editedEmailSubject}
+                      onChange={(event) => setEditedEmailSubject(event.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="emailBody" className="text-sm font-medium">Email body</Label>
+                    <Textarea
+                      id="emailBody"
+                      data-testid="textarea-email-body"
+                      className="mt-2 min-h-[160px] rounded-[24px] leading-7 resize-none"
+                      value={editedEmailBody}
+                      onChange={(event) => setEditedEmailBody(event.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === "saving" && (
+            <StageCard
+              eyebrow={form.mode === "proposal_email" ? "Finishing the send" : "Finishing the save"}
+              title={form.mode === "proposal_email" ? "Packaging and sending the proposal" : "Packaging and saving the proposal"}
+              description={
+                form.mode === "proposal_email"
+                  ? "The document is being generated, stored in Drive, and sent to the customer."
+                  : "The document is being generated and stored in Drive."
+              }
+              statuses={
+                form.mode === "proposal_email"
+                  ? [
+                      "Generating the Word document",
+                      "Saving the file to Google Drive",
+                      "Sending the customer email",
+                    ]
+                  : [
+                      "Generating the Word document",
+                      "Saving the file to Google Drive",
+                      "Preparing the finished links",
+                    ]
+              }
+            />
+          )}
+
+          {step === "done" && proposal && doneState && (
+            <div className="space-y-6">
+              <div className="space-y-3 text-center">
+                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-primary/15 bg-primary/10">
+                  <CheckCircle2 className="h-10 w-10 text-primary" />
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Proposal completed</p>
+                <h1 className="text-3xl font-semibold tracking-tight">Everything needed for the next step is ready.</h1>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  The proposal package has been completed and the follow-up actions are ready below.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <SuccessRow active={doneState.proposalReady} label="Proposal created" detail="The proposal text and customer-facing document are ready." />
+                {form.mode === "proposal_email" && (
+                  <SuccessRow active={doneState.emailSent} label="Email sent" detail="The customer email has been sent with the proposal link included." />
+                )}
+                <SuccessRow active={doneState.fileSaved} label="File saved" detail="The Word document was uploaded to Google Drive and a shareable link is available." />
+                <SuccessRow active={doneState.nextStepComplete} label="Next step complete" detail="You can open the file, copy the link, or move straight to the next customer." />
+              </div>
+
+              <div className="space-y-3">
+                {finalizeResult?.links.driveWebLink && (
+                  <a
+                    href={finalizeResult.links.driveWebLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="link-drive"
+                    className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-4 transition-colors hover:bg-muted/40"
+                  >
+                    <ExternalLink className="h-5 w-5 text-primary" />
+                    <span className="flex-1 font-medium">Open in Google Drive</span>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  </a>
+                )}
+
+                {finalizeResult?.links.gmailSentUrl && (
+                  <a
+                    href={finalizeResult.links.gmailSentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="link-gmail"
+                    className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-4 transition-colors hover:bg-muted/40"
+                  >
+                    <Mail className="h-5 w-5 text-primary" />
+                    <span className="flex-1 font-medium">Open sent email</span>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  </a>
+                )}
+
                 <button
                   onClick={copyLink}
                   data-testid="button-copy-link"
-                  className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4 active:bg-muted transition-colors text-left"
+                  className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card px-4 py-4 text-left transition-colors hover:bg-muted/40"
                 >
-                  <Copy className="w-5 h-5 text-muted-foreground" />
-                  <span className="font-medium flex-1">Copy Shareable Link</span>
+                  <Copy className="h-5 w-5 text-muted-foreground" />
+                  <span className="flex-1 font-medium">Copy shareable link</span>
                 </button>
-              )}
 
-              <a
-                href={`/api/proposals/${proposalId}/docx`}
-                data-testid="link-docx"
-                className="flex items-center gap-3 w-full bg-card border border-card-border rounded-xl p-4 active:bg-muted transition-colors"
-              >
-                <FileDown className="w-5 h-5 text-muted-foreground" />
-                <span className="font-medium flex-1">Download Word Document</span>
-                <ArrowRight className="w-4 h-4 text-muted-foreground" />
-              </a>
+                <a
+                  href={`/api/proposals/${proposalId}/docx`}
+                  data-testid="link-docx"
+                  className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-4 transition-colors hover:bg-muted/40"
+                >
+                  <FileDown className="h-5 w-5 text-muted-foreground" />
+                  <span className="flex-1 font-medium">Download Word document</span>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                </a>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Button
+                  data-testid="button-new-proposal"
+                  className="h-12 rounded-2xl"
+                  onClick={() => navigate("/")}
+                >
+                  Back to home
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="h-12 rounded-2xl"
+                  onClick={() => navigate("/new?mode=proposal_email")}
+                >
+                  Create another proposal
+                </Button>
+              </div>
             </div>
+          )}
+        </div>
 
+        {(step === "info" || step === "scope" || step === "review" || step === "confirm") && (
+          <div className="sticky bottom-0 border-t bg-background/95 px-5 py-4 backdrop-blur">
             <Button
-              data-testid="button-new-proposal"
-              className="w-full h-12 mt-4"
-              onClick={() => navigate("/")}
+              data-testid="button-next"
+              className="h-14 w-full rounded-2xl text-base font-semibold"
+              onClick={handleNext}
+              disabled={isLoading}
             >
-              <HardHat className="w-4 h-4 mr-2" />
-              Back to Home
+              {isLoading ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : step === "confirm" ? (
+                <>
+                  {form.mode === "proposal_email" ? (
+                    <>
+                      <Send className="mr-2 h-5 w-5" />
+                      Send proposal
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-2 h-5 w-5" />
+                      Save proposal
+                    </>
+                  )}
+                </>
+              ) : step === "review" ? (
+                <>
+                  <ArrowRight className="mr-2 h-5 w-5" />
+                  Continue to final check
+                </>
+              ) : (
+                <>
+                  <ArrowRight className="mr-2 h-5 w-5" />
+                  Continue
+                </>
+              )}
             </Button>
           </div>
         )}
       </div>
-
-      {(step === "info" || step === "scope" || step === "review" || step === "confirm") && (
-        <div className="sticky bottom-0 bg-background border-t px-5 py-4">
-          <Button
-            data-testid="button-next"
-            className="w-full h-14 text-base font-semibold gap-2"
-            onClick={handleNext}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : step === "confirm" ? (
-              <>
-                {form.mode === "proposal_email" ? (
-                  <>
-                    <Send className="w-5 h-5" />
-                    Upload & Send Email
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-5 h-5" />
-                    Upload to Drive
-                  </>
-                )}
-              </>
-            ) : step === "review" ? (
-              <>
-                <ArrowRight className="w-5 h-5" />
-                {form.mode === "proposal_email" ? "Review Email & Send" : "Confirm & Upload"}
-              </>
-            ) : (
-              <>
-                <ArrowRight className="w-5 h-5" />
-                Next
-              </>
-            )}
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

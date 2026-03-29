@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: docx-drive-mail-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: docx_drive_mail
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - docx-drive-mail-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d docx_drive_mail"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  docx-drive-mail-postgres:

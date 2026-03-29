@@ -5,10 +5,37 @@ import { storage } from "./storage";
 import { generateProposal, refineProposal } from "./ai";
 import { generateDocx } from "./docx-generator";
 import { uploadToDrive, setFilePublic, isDriveConnected, testDriveConnection, getDriveUserEmail } from "./google-drive";
-import { createGmailDraft, isGmailConnected, testGmailConnection, getGmailUserEmail } from "./google-mail";
+import { sendGmailMessage, isGmailConnected, testGmailConnection, getGmailUserEmail } from "./google-mail";
 import { transcribeAudio } from "./transcribe";
 import { z } from "zod";
-import { insertProposalSchema } from "@shared/schema";
+import { insertProposalSchema, type Proposal } from "@shared/schema";
+import {
+  appConfig,
+  hasDatabaseConfig,
+  hasGoogleOAuthConfig,
+  hasOpenAIConfig,
+} from "./config";
+import { hasDatabase } from "./db";
+import { getGoogleProviderMode } from "./google-auth";
+
+function buildFinalizeResponse(proposal: Proposal) {
+  const emailSent = proposal.mode === "proposal_email" ? Boolean(proposal.gmailMessageId) : false;
+  const fileSaved = Boolean(proposal.driveFileId && proposal.driveWebLink);
+
+  return {
+    proposal,
+    completion: {
+      proposalReady: Boolean(proposal.proposalText),
+      fileSaved,
+      emailSent,
+      nextStepComplete: proposal.mode === "proposal_email" ? fileSaved && emailSent : fileSaved,
+    },
+    links: {
+      driveWebLink: proposal.driveWebLink || undefined,
+      gmailSentUrl: emailSent ? "https://mail.google.com/mail/#sent" : undefined,
+    },
+  };
+}
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   // ─── Status ────────────────────────────────────────────────────────────────
@@ -39,6 +66,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.get("/api/settings/runtime", (_req: Request, res: Response) => {
+    const providerMode = getGoogleProviderMode();
+
+    res.json({
+      openai: {
+        configured: hasOpenAIConfig(),
+        model: appConfig.openaiChatModel,
+        transcriptionModel: appConfig.openaiTranscriptionModel,
+      },
+      database: {
+        configured: hasDatabaseConfig(),
+        connected: hasDatabase,
+      },
+      google: {
+        providerMode,
+        oauthConfigured: hasGoogleOAuthConfig(),
+        usingReplitConnectors: providerMode === "replit",
+      },
+    });
+  });
+
   // ─── Transcribe ────────────────────────────────────────────────────────────
   app.post(
     "/api/transcribe",
@@ -48,12 +96,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (!req.body || !Buffer.isBuffer(req.body) || req.body.length === 0) {
           return res.status(400).json({ error: "No audio data received" });
         }
-        const transcript = await transcribeAudio(req.body);
-        res.json({ transcript });
-      } catch (e: any) {
-        res.status(500).json({ error: e.message || "Transcription failed" });
-      }
+      const transcript = await transcribeAudio(req.body);
+      res.json({ transcript });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Transcription failed" });
     }
+  }
   );
 
   // ─── Proposals CRUD ─────────────────────────────────────────────────────────
@@ -134,7 +182,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(updated);
     } catch (e) {
       console.error(e);
-      res.status(500).json({ error: "AI generation failed" });
+      res.status(500).json({ error: (e as Error).message || "AI generation failed" });
     }
   });
 
@@ -157,7 +205,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(updated);
     } catch (e) {
       console.error(e);
-      res.status(500).json({ error: "Refinement failed" });
+      res.status(500).json({ error: (e as Error).message || "Refinement failed" });
     }
   });
 
@@ -220,36 +268,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ─── Gmail Draft ────────────────────────────────────────────────────────────
-  app.post("/api/proposals/:id/gmail-draft", async (req: Request, res: Response) => {
+  // ─── Gmail Send ─────────────────────────────────────────────────────────────
+  app.post("/api/proposals/:id/send-email", async (req: Request, res: Response) => {
     try {
       const proposal = await storage.getProposal(Number(req.params.id));
       if (!proposal || !proposal.proposalText) {
         return res.status(400).json({ error: "Proposal not generated yet" });
       }
       if (!proposal.customerEmail) {
-        return res.status(400).json({ error: "Customer email is required for email draft" });
+        return res.status(400).json({ error: "Customer email is required for sending" });
       }
       if (!proposal.driveWebLink) {
         return res.status(400).json({ error: "Proposal must be uploaded to Drive first" });
       }
 
-      // Build email body with the Drive link
       const emailBody = (proposal.emailBody || "")
         .replace("[PROPOSAL_LINK]", proposal.driveWebLink);
 
-      const { draftId } = await createGmailDraft(
+      const { messageId } = await sendGmailMessage(
         proposal.customerEmail,
         proposal.emailSubject || "Your Proposal",
         emailBody
       );
 
       const updated = await storage.updateProposal(proposal.id, {
-        gmailDraftId: draftId,
+        gmailMessageId: messageId,
         status: "completed",
       });
 
-      res.json({ draftId, proposal: updated });
+      res.json(buildFinalizeResponse(updated));
     } catch (e: any) {
       console.error(e);
       if (e.message === "GMAIL_NOT_CONNECTED") {
@@ -258,12 +305,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           code: "GMAIL_NOT_CONNECTED",
         });
       }
-      res.status(500).json({ error: "Gmail draft creation failed: " + e.message });
+      res.status(500).json({ error: "Gmail send failed: " + e.message });
     }
   });
 
   // ─── Full pipeline ────────────────────────────────────────────────────────
-  // Runs: generate docx → upload drive → set public → create gmail draft
+  // Runs: generate docx → upload drive → set public → send gmail
   app.post("/api/proposals/:id/finalize", async (req: Request, res: Response) => {
     try {
       const proposal = await storage.getProposal(Number(req.params.id));
@@ -282,29 +329,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       );
       await setFilePublic(fileId);
 
-      let gmailDraftId: string | undefined;
+      let gmailMessageId: string | undefined;
 
       if (proposal.mode === "proposal_email" && proposal.customerEmail) {
         let emailBody = (proposal.emailBody || "").replace("[PROPOSAL_LINK]", webViewLink);
         if (!emailBody.includes(webViewLink)) {
           emailBody += `\n\nView your proposal here: ${webViewLink}`;
         }
-        const result = await createGmailDraft(
+        const result = await sendGmailMessage(
           proposal.customerEmail,
           proposal.emailSubject || "Your Proposal",
           emailBody
         );
-        gmailDraftId = result.draftId;
+        gmailMessageId = result.messageId;
       }
 
       const updated = await storage.updateProposal(proposal.id, {
         driveFileId: fileId,
         driveWebLink: webViewLink,
-        gmailDraftId: gmailDraftId,
+        gmailMessageId,
         status: "completed",
       });
 
-      res.json({ fileId, webViewLink, gmailDraftId, proposal: updated });
+      res.json(buildFinalizeResponse(updated));
     } catch (e: any) {
       console.error(e);
       if (e.message === "GOOGLE_DRIVE_NOT_CONNECTED") {
