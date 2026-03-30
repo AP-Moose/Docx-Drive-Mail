@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -180,6 +180,7 @@ export default function NewProposal() {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const initialMode = params.get("mode") || "proposal_email";
+  const draftId = params.get("draft");
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -210,6 +211,41 @@ export default function NewProposal() {
     scopeNotes: "",
     mode: initialMode,
   });
+
+  const { data: draftProposal } = useQuery<Proposal>({
+    queryKey: ["/api/proposals", draftId],
+    enabled: Boolean(draftId),
+  });
+
+  useEffect(() => {
+    if (!draftProposal) return;
+
+    setProposalId(draftProposal.id);
+    setProposal(draftProposal);
+    setEditedText(draftProposal.proposalText || "");
+    setEditedEmailSubject(draftProposal.emailSubject || "");
+    setEditedEmailBody(draftProposal.emailBody || "");
+    setEmailList(
+      draftProposal.customerEmail
+        ? draftProposal.customerEmail.split(",").map((email) => email.trim()).filter(Boolean)
+        : [],
+    );
+    setForm({
+      customerName: draftProposal.customerName,
+      customerEmail: draftProposal.customerEmail || "",
+      jobAddress: draftProposal.jobAddress || "",
+      scopeNotes: draftProposal.scopeNotes || "",
+      mode: draftProposal.mode || initialMode,
+    });
+
+    if (draftProposal.proposalText) {
+      setStep("review");
+    } else if (draftProposal.scopeNotes) {
+      setStep("scope");
+    } else {
+      setStep("info");
+    }
+  }, [draftProposal, initialMode]);
 
   function update(field: keyof FormData, value: string) {
     setForm((current) => ({ ...current, [field]: value }));

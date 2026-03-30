@@ -143,6 +143,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const proposal = await storage.updateProposal(Number(req.params.id), req.body);
       res.json(proposal);
     } catch (e) {
+      if ((e as Error).message === "NOT_FOUND") {
+        return res.status(404).json({ error: "Not found" });
+      }
       res.status(500).json({ error: "Failed to update proposal" });
     }
   });

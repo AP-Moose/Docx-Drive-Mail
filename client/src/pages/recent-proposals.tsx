@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -8,11 +9,18 @@ import {
   ExternalLink,
   FileText,
   Loader2,
+  MoreHorizontal,
   HardHat,
   Clock,
 } from "lucide-react";
 import type { Proposal } from "@shared/schema";
 import { format } from "date-fns";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function statusColor(status: string) {
   switch (status) {
@@ -27,10 +35,28 @@ function statusColor(status: string) {
   }
 }
 
+function statusLabel(status: string) {
+  switch (status) {
+    case "generated":
+      return "Ready";
+    case "saved":
+      return "Saved";
+    case "completed":
+      return "Done";
+    default:
+      return "Draft";
+  }
+}
+
+function openPath(proposal: Proposal) {
+  return proposal.status === "draft" ? `/new?draft=${proposal.id}` : `/proposals/${proposal.id}`;
+}
+
 export default function RecentProposals() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
   const { data: proposals, isLoading } = useQuery<Proposal[]>({
     queryKey: ["/api/proposals"],
@@ -46,12 +72,34 @@ export default function RecentProposals() {
         scopeNotes: p.scopeNotes,
         mode: p.mode,
       });
-      return res.json() as Promise<Proposal>;
+      const created = (await res.json()) as Proposal;
+
+      if (!p.proposalText) return created;
+
+      const patchRes = await apiRequest("PATCH", `/api/proposals/${created.id}`, {
+        proposalTitle: p.proposalTitle,
+        proposalText: p.proposalText,
+        emailSubject: p.emailSubject,
+        emailBody: p.emailBody,
+        status: "generated",
+        driveFileId: null,
+        driveWebLink: null,
+        gmailMessageId: null,
+      });
+
+      return (await patchRes.json()) as Proposal;
     },
-    onSuccess: (p) => {
-      toast({ title: "Duplicated", description: `New draft created for ${p.customerName}` });
-      qc.invalidateQueries({ queryKey: ["/api/proposals"] });
-      navigate(`/proposals/${p.id}`);
+    onSuccess: async (p) => {
+      setHighlightedId(p.id);
+      toast({ title: "Duplicated", description: `Copied for ${p.customerName}` });
+      await qc.invalidateQueries({ queryKey: ["/api/proposals"] });
+      window.setTimeout(() => {
+        document.querySelector(`[data-testid="card-proposal-${p.id}"]`)?.scrollIntoView({
+          block: "center",
+          behavior: "smooth",
+        });
+      }, 50);
+      window.setTimeout(() => setHighlightedId((current) => (current === p.id ? null : current)), 2400);
     },
     onError: (e: any) => {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -96,7 +144,11 @@ export default function RecentProposals() {
             <div
               key={p.id}
               data-testid={`card-proposal-${p.id}`}
-              className="bg-card border border-card-border rounded-xl p-4 space-y-3"
+              className={`rounded-xl p-4 space-y-3 border transition-colors ${
+                highlightedId === p.id
+                  ? "border-primary/40 bg-primary/5"
+                  : "border-card-border bg-card"
+              }`}
             >
               {/* Header row */}
               <div className="flex items-start justify-between gap-2">
@@ -109,7 +161,7 @@ export default function RecentProposals() {
                   </p>
                 </div>
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor(p.status)}`}>
-                  {p.status}
+                  {statusLabel(p.status)}
                 </span>
               </div>
 
@@ -129,19 +181,9 @@ export default function RecentProposals() {
                   data-testid={`button-open-${p.id}`}
                   size="sm"
                   variant="default"
-                  onClick={() => navigate(`/proposals/${p.id}`)}
+                  onClick={() => navigate(openPath(p))}
                 >
                   Open
-                </Button>
-
-                <Button
-                  data-testid={`button-duplicate-${p.id}`}
-                  size="sm"
-                  variant="secondary"
-                  disabled={duplicateMutation.isPending}
-                  onClick={() => duplicateMutation.mutate(p)}
-                >
-                  Duplicate
                 </Button>
 
                 {p.driveWebLink && (
@@ -158,6 +200,27 @@ export default function RecentProposals() {
                   </Button>
                 )}
 
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      data-testid={`button-more-${p.id}`}
+                    >
+                      <MoreHorizontal className="w-3.5 h-3.5 mr-1" />
+                      More
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      data-testid={`button-duplicate-${p.id}`}
+                      disabled={duplicateMutation.isPending}
+                      onClick={() => duplicateMutation.mutate(p)}
+                    >
+                      Duplicate
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           ))}
