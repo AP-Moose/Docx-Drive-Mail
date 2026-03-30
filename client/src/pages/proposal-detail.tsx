@@ -2,7 +2,7 @@ import { useLocation, useParams } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { format } from "date-fns";
-import { ArrowLeft, CheckCircle2, Copy, ExternalLink, FileDown, HardHat, Loader2, Mail, RotateCcw, Scissors, AlignLeft, Send } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Copy, ExternalLink, FileDown, HardHat, Loader2, Mail, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -42,7 +42,6 @@ export default function ProposalDetail() {
   const qc = useQueryClient();
 
   const [editedText, setEditedText] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
   const [finalizeResult, setFinalizeResult] = useState<FinalizeResult | null>(null);
 
   const { data: proposal, isLoading } = useQuery<Proposal>({
@@ -60,26 +59,10 @@ export default function ProposalDetail() {
     },
     onSuccess: () => {
       toast({ title: "Saved", description: "Proposal edits were saved." });
-      setIsEditing(false);
       qc.invalidateQueries({ queryKey: ["/api/proposals", id] });
     },
     onError: (error) => {
       toast({ title: "Save failed", description: parseApiError(error), variant: "destructive" });
-    },
-  });
-
-  const refineMutation = useMutation({
-    mutationFn: async (instruction: "shorter" | "longer" | "regenerate") => {
-      await apiRequest("PATCH", `/api/proposals/${id}`, { proposalText: editedText });
-      const res = await apiRequest("POST", `/api/proposals/${id}/refine`, { instruction });
-      return (await res.json()) as Proposal;
-    },
-    onSuccess: (updated) => {
-      setEditedText(updated.proposalText || "");
-      qc.invalidateQueries({ queryKey: ["/api/proposals", id] });
-    },
-    onError: (error) => {
-      toast({ title: "Refinement failed", description: parseApiError(error), variant: "destructive" });
     },
   });
 
@@ -154,61 +137,41 @@ export default function ProposalDetail() {
 
           {proposal.proposalText && (
             <>
-              {isEditing ? (
-                <div className="space-y-4">
-                  <Textarea
-                    data-testid="textarea-proposal-edit"
-                    className="min-h-[360px] rounded-[28px] bg-card px-5 py-5 font-mono text-sm leading-7 resize-none"
-                    value={editedText}
-                    onChange={(event) => setEditedText(event.target.value)}
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      data-testid="button-save-edits"
-                      onClick={() => saveMutation.mutate()}
-                      disabled={saveMutation.isPending}
-                    >
-                      {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      Save
-                    </Button>
-                    <Button variant="secondary" onClick={() => setIsEditing(false)}>
-                      Cancel
-                    </Button>
-                  </div>
+              <div className="space-y-3 rounded-[28px] border border-border/80 bg-card px-5 py-4 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.28)]">
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Customer view</p>
+                  <div className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">Live preview</div>
                 </div>
-              ) : (
+
                 <ProposalPreview
                   title={proposal.proposalTitle || undefined}
                   text={editedText}
                   customerName={proposal.customerName}
                   customerEmail={proposal.customerEmail || undefined}
                   jobAddress={proposal.jobAddress || undefined}
-                  className="max-h-[560px]"
+                  className="max-h-[420px]"
                 />
-              )}
+
+                <div className="space-y-2 rounded-2xl border border-border/80 bg-background px-4 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Edit exact text</p>
+                  <Textarea
+                    data-testid="textarea-proposal-edit"
+                    className="min-h-[220px] rounded-[24px] bg-card px-5 py-5 font-mono text-sm leading-7 resize-none"
+                    value={editedText}
+                    onChange={(event) => setEditedText(event.target.value)}
+                  />
+                </div>
+              </div>
 
               <div className="space-y-4 rounded-[28px] border border-border/80 bg-card px-5 py-5">
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    data-testid="button-edit-proposal"
-                    variant="secondary"
-                    onClick={() => setIsEditing((current) => !current)}
-                  >
-                    {isEditing ? "Preview document" : "Edit text"}
-                  </Button>
-                  <Button variant="secondary" disabled={refineMutation.isPending} onClick={() => refineMutation.mutate("shorter")}>
-                    <Scissors className="mr-2 h-4 w-4" />
-                    Shorter
-                  </Button>
-                  <Button variant="secondary" disabled={refineMutation.isPending} onClick={() => refineMutation.mutate("longer")}>
-                    <AlignLeft className="mr-2 h-4 w-4" />
-                    Longer
-                  </Button>
-                  <Button variant="secondary" disabled={refineMutation.isPending} onClick={() => refineMutation.mutate("regenerate")}>
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Redo
-                  </Button>
-                </div>
+                <Button
+                  data-testid="button-save-edits"
+                  onClick={() => saveMutation.mutate()}
+                  disabled={saveMutation.isPending}
+                >
+                  {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Save changes
+                </Button>
 
                 {isComplete ? (
                   <div className="space-y-3">

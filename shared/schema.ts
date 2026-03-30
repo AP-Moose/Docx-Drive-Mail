@@ -60,7 +60,7 @@ export const insertProposalSchema = z.object({
   customerName: z.string().min(1),
   customerEmail: z.string().nullable().optional(),
   jobAddress: z.string().nullable().optional(),
-  projectType: z.string().min(1),
+  projectType: z.string().min(1).optional().default("General"),
   priceEstimate: z.string().nullable().optional(),
   timeline: z.string().nullable().optional(),
   scopeNotes: z.string().min(1),

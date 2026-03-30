@@ -18,7 +18,7 @@ export default function Home() {
             </div>
           </div>
           <p className="max-w-md text-sm leading-6 text-primary-foreground/80">
-            Build a clean customer proposal, save the document to Drive, and send the email without leaving the flow.
+            Build the proposal, save it to Drive, and send it out.
           </p>
         </div>
 
@@ -37,7 +37,7 @@ export default function Home() {
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/70">Primary action</p>
                   <h2 className="text-2xl font-semibold tracking-tight">Create Proposal</h2>
                   <p className="max-w-sm text-sm leading-6 text-white/75">
-                    Start the full workflow: customer info, scope capture, proposal review, Drive save, and live email send.
+                    Customer info, scope, review, then send.
                   </p>
                 </div>
               </div>
@@ -54,7 +54,7 @@ export default function Home() {
                 </div>
                 <div className="flex-1">
                   <div className="font-semibold">Recent proposals</div>
-                  <div className="text-sm text-muted-foreground">Open completed proposals and resend follow-up materials.</div>
+                  <div className="text-sm text-muted-foreground">Open finished proposals and resend if needed.</div>
                 </div>
               </button>
 
@@ -68,7 +68,7 @@ export default function Home() {
                 </div>
                 <div className="flex-1">
                   <div className="font-semibold">Proposal only</div>
-                  <div className="text-sm text-muted-foreground">Create and save the document without sending the email step.</div>
+                  <div className="text-sm text-muted-foreground">Create it and save it without email.</div>
                 </div>
               </button>
             </div>
@@ -82,7 +82,7 @@ export default function Home() {
             className="mx-auto flex items-center gap-2 rounded-full px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <Settings className="h-4 w-4" />
-            Settings and connections
+            Settings
           </button>
         </div>
       </div>

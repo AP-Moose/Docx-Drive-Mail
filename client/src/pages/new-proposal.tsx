@@ -15,14 +15,12 @@ import {
   Circle,
   Copy,
   ExternalLink,
-  Eye,
   FileDown,
   HardHat,
   Loader2,
   Mail,
   Mic,
   MicOff,
-  Pencil,
   Plus,
   RotateCcw,
   Scissors,
@@ -191,12 +189,12 @@ export default function NewProposal() {
   const [editedText, setEditedText] = useState("");
   const [editedEmailSubject, setEditedEmailSubject] = useState("");
   const [editedEmailBody, setEditedEmailBody] = useState("");
-  const [previewMode, setPreviewMode] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isChatListening, setIsChatListening] = useState(false);
   const [isChatTranscribing, setIsChatTranscribing] = useState(false);
   const [chatInput, setChatInput] = useState("");
+  const [showTypedAiInput, setShowTypedAiInput] = useState(false);
   const [emailList, setEmailList] = useState<string[]>([]);
   const [emailInput, setEmailInput] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -333,6 +331,25 @@ export default function NewProposal() {
     setEmailInput("");
   }
 
+  function buildNextEmailList() {
+    const pendingEmail = emailInput.trim().replace(/,+$/, "").trim();
+    if (!pendingEmail) return emailList;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(pendingEmail)) {
+      toast({ title: "Invalid email", description: "Enter a valid recipient email.", variant: "destructive" });
+      return null;
+    }
+
+    if (emailList.includes(pendingEmail)) {
+      toast({ title: "Already added", description: "That email is already on the recipient list.", variant: "destructive" });
+      setEmailInput("");
+      return emailList;
+    }
+
+    return [...emailList, pendingEmail];
+  }
+
   const createMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/proposals", {
@@ -451,13 +468,18 @@ export default function NewProposal() {
         toast({ title: "Customer name required", description: "Add the customer name before moving on.", variant: "destructive" });
         return;
       }
-      if (form.mode === "proposal_email" && emailList.length === 0) {
-        if (emailInput.trim()) {
-          addEmail();
+      if (form.mode === "proposal_email") {
+        const nextEmails = buildNextEmailList();
+        if (nextEmails === null) return;
+        if (nextEmails.length === 0) {
+          toast({ title: "Recipient required", description: "Add at least one email recipient.", variant: "destructive" });
           return;
         }
-        toast({ title: "Recipient required", description: "Add at least one email recipient.", variant: "destructive" });
-        return;
+        if (nextEmails.join(", ") !== form.customerEmail) {
+          setEmailList(nextEmails);
+          update("customerEmail", nextEmails.join(", "));
+          setEmailInput("");
+        }
       }
       setStep("scope");
       return;
@@ -708,143 +730,37 @@ export default function NewProposal() {
 
           {step === "review" && proposal && (
             <div className="space-y-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Proposal review</p>
-                  <h1 className="text-3xl font-semibold tracking-tight">{proposal.proposalTitle}</h1>
-                  <p className="text-sm text-muted-foreground">
-                    {proposal.customerName}
-                    {proposal.jobAddress ? `  ·  ${proposal.jobAddress}` : ""}
-                  </p>
-                </div>
-                <Button
-                  data-testid="button-toggle-preview"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full px-4"
-                  onClick={() => setPreviewMode((current) => !current)}
-                >
-                  {previewMode ? (
-                    <>
-                      <Pencil className="mr-2 h-3.5 w-3.5" />
-                      Edit text
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="mr-2 h-3.5 w-3.5" />
-                      Preview document
-                    </>
-                  )}
-                </Button>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Proposal review</p>
+                <span className="rounded-full border border-border/80 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                  {form.mode === "proposal_email" ? "Drive + Email" : "Drive + Manual Share"}
+                </span>
               </div>
 
-              {previewMode ? (
+              <div className="space-y-3 rounded-[28px] border border-border/80 bg-card px-5 py-4 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.28)]">
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Customer view</p>
+                  <div className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">Live preview</div>
+                </div>
+
                 <ProposalPreview
                   title={proposal.proposalTitle || undefined}
                   text={editedText}
                   customerName={proposal.customerName}
                   customerEmail={proposal.customerEmail || undefined}
                   jobAddress={proposal.jobAddress || undefined}
-                  className="max-h-[480px]"
+                  className="max-h-[420px]"
                 />
-              ) : (
-                <Textarea
-                  data-testid="textarea-proposal"
-                  className="min-h-[360px] rounded-[28px] border-border/80 bg-card px-5 py-5 font-mono text-sm leading-7 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.28)] resize-none"
-                  value={editedText}
-                  onChange={(event) => setEditedText(event.target.value)}
-                />
-              )}
 
-              <div className="space-y-4 rounded-[28px] border border-border/80 bg-card px-5 py-5">
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Quick changes</p>
-                  <p className="text-sm text-muted-foreground">Make a fast structural adjustment or tell the AI exactly what to change.</p>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  <Button
-                    data-testid="button-make-shorter"
-                    variant="secondary"
-                    className="rounded-2xl"
-                    disabled={refineMutation.isPending}
-                    onClick={() => refineMutation.mutate("shorter")}
-                  >
-                    <Scissors className="mr-2 h-4 w-4" />
-                    Shorter
-                  </Button>
-                  <Button
-                    data-testid="button-make-longer"
-                    variant="secondary"
-                    className="rounded-2xl"
-                    disabled={refineMutation.isPending}
-                    onClick={() => refineMutation.mutate("longer")}
-                  >
-                    <AlignLeft className="mr-2 h-4 w-4" />
-                    Longer
-                  </Button>
-                  <Button
-                    data-testid="button-regenerate"
-                    variant="secondary"
-                    className="rounded-2xl"
-                    disabled={refineMutation.isPending}
-                    onClick={() => refineMutation.mutate("regenerate")}
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Redo
-                  </Button>
-                </div>
-
-                <div className="flex gap-2">
-                  <Input
-                    data-testid="input-chat-refine"
-                    className="h-12 rounded-2xl"
-                    placeholder={
-                      isChatListening
-                        ? "Listening…"
-                        : isChatTranscribing
-                        ? "Transcribing…"
-                        : 'Example: shorten the opening and make the timeline more confident'
-                    }
-                    value={chatInput}
-                    onChange={(event) => setChatInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && chatInput.trim()) handleChatSubmit();
-                    }}
-                    disabled={refineMutation.isPending}
+                <div className="space-y-2 rounded-2xl border border-border/80 bg-background px-4 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Edit exact text</p>
+                  <Textarea
+                    data-testid="textarea-proposal"
+                    className="min-h-[220px] rounded-[24px] border-border/80 bg-card px-5 py-5 font-mono text-sm leading-7 resize-none"
+                    value={editedText}
+                    onChange={(event) => setEditedText(event.target.value)}
                   />
-                  <Button
-                    data-testid="button-chat-voice"
-                    variant={isChatListening ? "destructive" : "secondary"}
-                    className="h-12 rounded-2xl px-4"
-                    onClick={toggleChatVoice}
-                    disabled={refineMutation.isPending || isChatTranscribing}
-                  >
-                    {isChatTranscribing ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : isChatListening ? (
-                      <MicOff className="h-4 w-4" />
-                    ) : (
-                      <Mic className="h-4 w-4" />
-                    )}
-                  </Button>
-                  <Button
-                    data-testid="button-chat-send"
-                    className="h-12 rounded-2xl px-4"
-                    onClick={handleChatSubmit}
-                    disabled={refineMutation.isPending || !chatInput.trim()}
-                  >
-                    {refineMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </Button>
                 </div>
-
-                {(isChatListening || isChatTranscribing || refineMutation.isPending) && (
-                  <p className="text-sm text-muted-foreground">
-                    {isChatListening && "Listening now. Tap the mic again when you finish speaking."}
-                    {isChatTranscribing && " Turning your voice note into a refinement request."}
-                    {refineMutation.isPending && " Rewriting the proposal with your latest instruction."}
-                  </p>
-                )}
               </div>
             </div>
           )}
@@ -1045,6 +961,77 @@ export default function NewProposal() {
 
         {(step === "info" || step === "scope" || step === "review" || step === "confirm") && (
           <div className="sticky bottom-0 border-t bg-background/95 px-5 py-4 backdrop-blur">
+            {step === "review" && (
+              <div className="mb-3 space-y-2 rounded-[20px] border border-border/70 bg-background/98 px-3 py-2.5 shadow-[0_10px_24px_-20px_rgba(17,24,39,0.22)]">
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/65">Change with AI</p>
+                  {(isChatListening || isChatTranscribing || refineMutation.isPending) && (
+                    <p className="text-xs text-muted-foreground">
+                      {isChatListening ? "Listening…" : isChatTranscribing || refineMutation.isPending ? "Rewriting…" : ""}
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  data-testid="button-chat-voice-footer"
+                  variant={isChatListening ? "destructive" : "secondary"}
+                  className="h-13 w-auto min-w-[220px] rounded-2xl border border-primary/15 bg-primary/8 px-5 text-[15px] font-semibold text-primary shadow-[0_10px_20px_-18px_rgba(22,101,52,0.35)]"
+                  onClick={toggleChatVoice}
+                  disabled={refineMutation.isPending || isChatTranscribing}
+                >
+                  {isChatTranscribing ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Rewriting with your voice note
+                    </>
+                  ) : isChatListening ? (
+                    <>
+                      <MicOff className="mr-2 h-5 w-5" />
+                      Finish voice change
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="mr-2 h-5 w-5" />
+                      Tap once and describe the change
+                    </>
+                  )}
+                </Button>
+
+                <div className="flex items-center gap-3 px-1 pt-0.5">
+                  <button
+                    type="button"
+                    className="text-[13px] font-medium text-primary transition-colors hover:text-primary/80"
+                    onClick={() => setShowTypedAiInput((current) => !current)}
+                  >
+                    {showTypedAiInput ? "Hide typing" : "Type instead"}
+                  </button>
+                </div>
+
+                {showTypedAiInput && (
+                  <div className="flex gap-2 pt-0.5">
+                    <Input
+                      data-testid="input-chat-refine"
+                      className="h-11 rounded-2xl border-border/80 bg-white text-[15px] shadow-sm"
+                      placeholder="Type the change you want"
+                      value={chatInput}
+                      onChange={(event) => setChatInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && chatInput.trim()) handleChatSubmit();
+                      }}
+                      disabled={refineMutation.isPending}
+                    />
+                    <Button
+                      data-testid="button-chat-send"
+                      className="h-11 rounded-2xl px-4"
+                      onClick={handleChatSubmit}
+                      disabled={refineMutation.isPending || !chatInput.trim()}
+                    >
+                      {refineMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
             <Button
               data-testid="button-next"
               className="h-14 w-full rounded-2xl text-base font-semibold"
