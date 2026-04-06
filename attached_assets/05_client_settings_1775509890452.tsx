@@ -1,0 +1,278 @@
+import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import {
+  ArrowLeft,
+  HardHat,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  HardDrive,
+  Mail,
+  RefreshCw,
+  Database,
+  Brain,
+  Cable,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+interface ConnectionStatus {
+  drive: { connected: boolean; email?: string };
+  gmail: { connected: boolean; email?: string };
+}
+
+interface RuntimeStatus {
+  openai: {
+    configured: boolean;
+    model: string;
+    transcriptionModel: string;
+  };
+  database: {
+    configured: boolean;
+    connected: boolean;
+  };
+  google: {
+    providerMode: "oauth" | "replit" | "none";
+    oauthConfigured: boolean;
+    usingReplitConnectors: boolean;
+  };
+}
+
+function StatusIcon({ ok }: { ok: boolean }) {
+  return ok ? (
+    <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" />
+  ) : (
+    <XCircle className="w-5 h-5 text-red-500 dark:text-red-400 shrink-0" />
+  );
+}
+
+function StatusCard({
+  testId,
+  title,
+  description,
+  ok,
+  icon,
+}: {
+  testId: string;
+  title: string;
+  description: string;
+  ok: boolean;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div
+      data-testid={testId}
+      className="bg-card border border-card-border rounded-xl p-4 flex items-center gap-4"
+    >
+      <div
+        className={`rounded-full p-2.5 ${
+          ok ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30"
+        }`}
+      >
+        {icon}
+      </div>
+      <div className="flex-1">
+        <p className="font-medium">{title}</p>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      <StatusIcon ok={ok} />
+    </div>
+  );
+}
+
+export default function Settings() {
+  const [, navigate] = useLocation();
+
+  const {
+    data: connections,
+    isLoading: connectionsLoading,
+    refetch: refetchConnections,
+    isFetching: connectionsFetching,
+  } = useQuery<ConnectionStatus>({
+    queryKey: ["/api/settings/status"],
+  });
+
+  const {
+    data: runtime,
+    isLoading: runtimeLoading,
+    refetch: refetchRuntime,
+    isFetching: runtimeFetching,
+  } = useQuery<RuntimeStatus>({
+    queryKey: ["/api/settings/runtime"],
+  });
+
+  const isLoading = connectionsLoading || runtimeLoading;
+  const isFetching = connectionsFetching || runtimeFetching;
+
+  const refreshAll = async () => {
+    await Promise.all([refetchConnections(), refetchRuntime()]);
+  };
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col max-w-2xl mx-auto">
+      <div className="bg-primary px-5 pt-10 pb-6 text-primary-foreground">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate("/")} className="text-primary-foreground/80" data-testid="button-back">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <HardHat className="w-5 h-5" />
+          <h1 className="text-xl font-bold">Settings</h1>
+        </div>
+      </div>
+
+      <div className="flex-1 px-5 py-6 space-y-6">
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Connected Accounts</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={refreshAll}
+              disabled={isFetching}
+              data-testid="button-refresh-status"
+              className="gap-1.5"
+            >
+              <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
+
+          {isLoading && (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          )}
+
+          {!isLoading && connections && (
+            <div className="space-y-3">
+              <StatusCard
+                testId="status-drive"
+                title="Google Drive"
+                description={
+                  connections.drive.connected
+                    ? connections.drive.email
+                      ? `Connected as ${connections.drive.email}`
+                      : "Connected — proposals will upload to Drive"
+                    : "Not connected"
+                }
+                ok={connections.drive.connected}
+                icon={
+                  <HardDrive
+                    className={`w-5 h-5 ${
+                      connections.drive.connected
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-500 dark:text-red-400"
+                    }`}
+                  />
+                }
+              />
+
+              <StatusCard
+                testId="status-gmail"
+                title="Gmail"
+                description={
+                  connections.gmail.connected
+                    ? connections.gmail.email
+                      ? `Connected as ${connections.gmail.email}`
+                      : "Connected — proposals will be emailed"
+                    : "Not connected"
+                }
+                ok={connections.gmail.connected}
+                icon={
+                  <Mail
+                    className={`w-5 h-5 ${
+                      connections.gmail.connected
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-500 dark:text-red-400"
+                    }`}
+                  />
+                }
+              />
+
+              {(!connections.drive.connected || !connections.gmail.connected) && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mt-4">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
+                    Account disconnected
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    Set the Google OAuth environment variables for the missing service and restart the app. Replit connector auth still works if the app is running in Replit.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {!isLoading && runtime && (
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Local Runtime Checks</h2>
+            <div className="space-y-3">
+              <StatusCard
+                testId="status-openai"
+                title="OpenAI"
+                description={
+                  runtime.openai.configured
+                    ? `Configured for chat ${runtime.openai.model} and transcription ${runtime.openai.transcriptionModel}`
+                    : "Missing OpenAI environment variables"
+                }
+                ok={runtime.openai.configured}
+                icon={
+                  <Brain
+                    className={`w-5 h-5 ${
+                      runtime.openai.configured
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-500 dark:text-red-400"
+                    }`}
+                  />
+                }
+              />
+
+              <StatusCard
+                testId="status-database"
+                title="Postgres"
+                description={
+                  runtime.database.connected
+                    ? "DATABASE_URL is configured and the database-backed storage path is active"
+                    : runtime.database.configured
+                      ? "DATABASE_URL is set, but the app is not using database-backed storage"
+                      : "No DATABASE_URL set — app is using in-memory storage"
+                }
+                ok={runtime.database.connected}
+                icon={
+                  <Database
+                    className={`w-5 h-5 ${
+                      runtime.database.connected
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-500 dark:text-red-400"
+                    }`}
+                  />
+                }
+              />
+
+              <StatusCard
+                testId="status-google-provider"
+                title="Google Provider Mode"
+                description={
+                  runtime.google.providerMode === "oauth"
+                    ? "Using standard Google OAuth env vars for local Drive and Gmail access"
+                    : runtime.google.providerMode === "replit"
+                      ? "Using Replit connectors for Drive and Gmail access"
+                      : "No Google provider is configured"
+                }
+                ok={runtime.google.providerMode !== "none"}
+                icon={
+                  <Cable
+                    className={`w-5 h-5 ${
+                      runtime.google.providerMode !== "none"
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-500 dark:text-red-400"
+                    }`}
+                  />
+                }
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
