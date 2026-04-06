@@ -1000,7 +1000,7 @@ export default function NewProposal() {
                   variant="secondary"
                   className={`h-13 w-auto min-w-[220px] rounded-2xl px-5 text-[15px] font-semibold shadow-[0_10px_20px_-18px_rgba(22,101,52,0.35)] ${
                     isChatListening
-                      ? "border border-amber-300 bg-amber-50 text-amber-900"
+                      ? "border border-amber-300 bg-amber-50 text-amber-900 animate-pulse"
                       : "border border-primary/15 bg-primary/8 text-primary"
                   }`}
                   onClick={toggleChatVoice}
