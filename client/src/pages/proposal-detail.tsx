@@ -77,7 +77,11 @@ export default function ProposalDetail() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("PATCH", `/api/proposals/${id}`, { proposalText: editedText });
+      const res = await apiRequest("PATCH", `/api/proposals/${id}`, {
+        proposalText: editedText,
+        emailSubject: editedEmailSubject || undefined,
+        emailBody: editedEmailBody || undefined,
+      });
       return (await res.json()) as Proposal;
     },
     onSuccess: () => {
