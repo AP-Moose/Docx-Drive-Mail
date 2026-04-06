@@ -22,18 +22,21 @@ Mobile-first web app for contractors to create professional proposals, upload to
 
 ## Key Files
 
-- `shared/schema.ts` — Drizzle schema, types, insert schemas
-- `server/routes.ts` — API routes (CRUD, generate, refine, finalize, docx, drive-upload, gmail-send)
-- `server/ai.ts` — OpenAI proposal generation (infers project type; outputs structured format: PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, ACCEPTANCE OF PROPOSAL)
+- `shared/schema.ts` — Drizzle schema, types, insert schemas (gmailMessageId column)
+- `server/config.ts` — Centralized config: AI_INTEGRATIONS_OPENAI_API_KEY > OPENAI_API_KEY priority
+- `server/google-auth.ts` — getGoogleProviderMode() → "replit" | "oauth" | "none"
+- `server/routes.ts` — API routes: CRUD, generate, refine, finalize, docx, drive-upload, send-email, settings/runtime
+- `server/ai.ts` — OpenAI proposal generation (infers project type; structured format)
 - `server/docx-generator.ts` — .docx generation via `docx` package (includes Inspiring Services logo at top)
-- `server/google-drive.ts` — Drive upload with folder hierarchy + public permission
-- `server/google-mail.ts` — Gmail send via `users.messages.send` (gmail.send scope, supports multiple To: recipients)
+- `server/google-drive.ts` — Drive upload with folder hierarchy + public permission (Replit Connectors)
+- `server/google-mail.ts` — sendGmailMessage() via googleapis + Replit Connectors (gmail.send scope)
 - `server/storage.ts` — IStorage interface + DatabaseStorage implementation
 - `client/src/components/proposal-preview.tsx` — Rich formatted proposal preview (matches Drive/docx styling)
 - `client/src/pages/new-proposal.tsx` — 5-step wizard (info → scope → review → confirm → done)
-- `client/src/pages/home.tsx` — Home page (one primary Create button)
-- `client/src/pages/recent-proposals.tsx` — Recent proposals list
-- `client/src/pages/proposal-detail.tsx` — Single proposal detail view with formatted preview
+- `client/src/pages/home.tsx` — Home page (gradient hero, one primary Create button)
+- `client/src/pages/recent-proposals.tsx` — Recent proposals list with duplicate + dropdown
+- `client/src/pages/proposal-detail.tsx` — Single proposal detail with formatted preview and AI refinement
+- `client/src/pages/settings.tsx` — Connection status for Drive, Gmail + runtime status for OpenAI, DB, Google provider
 
 ## UI Flow (5 steps)
 

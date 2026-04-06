@@ -48,7 +48,7 @@ export const proposals = pgTable("proposals", {
   emailBody: text("email_body"),
   driveFileId: text("drive_file_id"),
   driveWebLink: text("drive_web_link"),
-  gmailDraftId: text("gmail_draft_id"),
+  gmailMessageId: text("gmail_message_id"),
   mode: text("mode").notNull().default("proposal_email"),
   status: text("status").notNull().default("draft"),
   version: integer("version").notNull().default(1),
@@ -56,19 +56,15 @@ export const proposals = pgTable("proposals", {
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const insertProposalSchema = createInsertSchema(proposals).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-  proposalTitle: true,
-  proposalText: true,
-  emailSubject: true,
-  emailBody: true,
-  driveFileId: true,
-  driveWebLink: true,
-  gmailDraftId: true,
-  status: true,
-  version: true,
+export const insertProposalSchema = z.object({
+  customerName: z.string().min(1),
+  customerEmail: z.string().nullable().optional(),
+  jobAddress: z.string().nullable().optional(),
+  projectType: z.string().min(1).optional().default("General"),
+  priceEstimate: z.string().nullable().optional(),
+  timeline: z.string().nullable().optional(),
+  scopeNotes: z.string().min(1),
+  mode: z.string().optional().default("proposal_email"),
 });
 
 export type InsertProposal = z.infer<typeof insertProposalSchema>;

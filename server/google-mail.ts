@@ -6,11 +6,11 @@
  * WARNING: Never cache the Gmail client — access tokens expire.
  */
 import { google } from "googleapis";
+import { getGoogleProviderMode } from "./google-auth";
 
 let connectionSettings: any;
 
 async function getAccessToken() {
-  // Re-use cached token if still valid
   if (
     connectionSettings &&
     connectionSettings.settings?.expires_at &&
@@ -39,7 +39,7 @@ async function getAccessToken() {
     }
   )
     .then((r) => r.json())
-    .then((data) => data.items?.[0]);
+    .then((data: any) => data.items?.[0]);
 
   const accessToken =
     connectionSettings?.settings?.access_token ||
@@ -51,7 +51,6 @@ async function getAccessToken() {
   return accessToken;
 }
 
-/** Get a fresh Gmail client — never cache */
 async function getUncachableGmailClient() {
   const accessToken = await getAccessToken();
   const oauth2Client = new google.auth.OAuth2();
@@ -60,7 +59,7 @@ async function getUncachableGmailClient() {
 }
 
 export function isGmailConnected(): boolean {
-  return !!process.env.REPLIT_CONNECTORS_HOSTNAME;
+  return getGoogleProviderMode() !== "none";
 }
 
 export async function testGmailConnection(): Promise<boolean> {
@@ -78,26 +77,18 @@ export async function getGmailUserEmail(): Promise<string | null> {
     const resp = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    const data = await resp.json() as any;
+    const data = (await resp.json()) as any;
     return data.email || null;
   } catch {
     return null;
   }
 }
 
-/** Encode to base64url for Gmail raw message */
 function toBase64Url(buf: Buffer): string {
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-/**
- * Build a plain-text MIME message (no attachment — Drive link is in the body).
- */
-function buildMimeMessage(
-  to: string,
-  subject: string,
-  bodyText: string
-): string {
+function buildMimeMessage(to: string, subject: string, bodyText: string): string {
   const raw = [
     `MIME-Version: 1.0`,
     `To: ${to}`,
@@ -110,22 +101,16 @@ function buildMimeMessage(
   return toBase64Url(Buffer.from(raw));
 }
 
-/**
- * Send an email directly via Gmail (uses gmail.send scope).
- * Returns the sent message ID — we store this as the "draft ID" in the DB
- * so the user can find it in their Sent folder.
- */
-export async function createGmailDraft(
+export async function sendGmailMessage(
   to: string,
   subject: string,
-  bodyText: string
-): Promise<{ draftId: string }> {
+  bodyText: string,
+): Promise<{ messageId: string }> {
   if (!isGmailConnected()) throw new Error("GMAIL_NOT_CONNECTED");
 
   const gmail = await getUncachableGmailClient();
   const raw = buildMimeMessage(to, subject, bodyText);
 
-  // Use messages.send — supported by gmail.send scope
   const response = await gmail.users.messages.send({
     userId: "me",
     requestBody: { raw },
@@ -136,5 +121,5 @@ export async function createGmailDraft(
     throw new Error(`Gmail send returned no message ID: ${JSON.stringify(response.data)}`);
   }
 
-  return { draftId: messageId };
+  return { messageId };
 }
