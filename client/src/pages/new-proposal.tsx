@@ -192,6 +192,7 @@ export default function NewProposal() {
   const [editedEmailBody, setEditedEmailBody] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [hasRecordedScope, setHasRecordedScope] = useState(false);
   const [isChatListening, setIsChatListening] = useState(false);
   const [isChatTranscribing, setIsChatTranscribing] = useState(false);
   const [chatInput, setChatInput] = useState("");
@@ -251,6 +252,13 @@ export default function NewProposal() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  function goBack() {
+    if (step === "info") navigate("/");
+    else if (step === "scope") setStep("info");
+    else if (step === "review") setStep("scope");
+    else if (step === "confirm") setStep("review");
+  }
+
   async function transcribeBlob(blob: Blob): Promise<string | null> {
     try {
       const res = await fetch("/api/transcribe", {
@@ -289,6 +297,7 @@ export default function NewProposal() {
         setIsTranscribing(true);
         const transcript = await transcribeBlob(new Blob(chunks, { type: "audio/webm" }));
         if (transcript) {
+          setHasRecordedScope(true);
           setForm((current) => ({
             ...current,
             scopeNotes: current.scopeNotes ? `${current.scopeNotes.trim()}\n${transcript}` : transcript,
@@ -564,8 +573,8 @@ export default function NewProposal() {
       <div className="mx-auto flex min-h-screen max-w-2xl flex-col">
         <div className="bg-primary px-5 pb-6 pt-10 text-primary-foreground">
           <div className="mb-4 flex items-center gap-3">
-            {step !== "done" && (
-              <button onClick={() => navigate("/")} className="rounded-full p-1 text-primary-foreground/80 transition-colors hover:text-primary-foreground">
+            {(step === "info" || step === "scope" || step === "review" || step === "confirm") && (
+              <button onClick={goBack} className="rounded-full p-1 text-primary-foreground/80 transition-colors hover:text-primary-foreground">
                 <ArrowLeft className="h-5 w-5" />
               </button>
             )}
@@ -582,15 +591,7 @@ export default function NewProposal() {
 
         <div className="flex-1 px-5 py-6">
           {step === "info" && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Start the proposal</p>
-                <h1 className="text-3xl font-semibold tracking-tight">Capture the customer basics first.</h1>
-                <p className="max-w-xl text-sm leading-6 text-muted-foreground">
-                  Keep this quick. Name, recipient, and address are all you need before the app turns the job details into a polished proposal.
-                </p>
-              </div>
-
+            <div className="space-y-4">
               <div className="space-y-5 rounded-[28px] border border-border/80 bg-card px-5 py-6 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.25)]">
                 <div>
                   <Label htmlFor="customerName" className="text-base font-medium">
@@ -681,15 +682,7 @@ export default function NewProposal() {
           )}
 
           {step === "scope" && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Describe the work</p>
-                <h1 className="text-3xl font-semibold tracking-tight">Talk like you would on the jobsite.</h1>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Include materials, measurements, price, timing, or anything the customer should see in the finished proposal. Voice is primary. Typing stays fully supported.
-                </p>
-              </div>
-
+            <div className="space-y-4">
               <button
                 data-testid="button-voice"
                 type="button"
@@ -697,7 +690,7 @@ export default function NewProposal() {
                 disabled={isTranscribing}
                 className={`w-full rounded-[32px] border px-6 py-8 text-left transition-all active:scale-[0.99] ${
                   isListening
-                    ? "border-red-400 bg-red-500 text-white shadow-[0_24px_60px_-30px_rgba(239,68,68,0.6)]"
+                    ? "border-amber-300 bg-amber-50 text-amber-900 shadow-[0_24px_60px_-30px_rgba(251,191,36,0.2)]"
                     : isTranscribing
                     ? "border-primary/30 bg-primary/10 text-primary"
                     : "border-primary/20 bg-[linear-gradient(180deg,rgba(22,163,74,0.10),rgba(255,255,255,0.96))] text-foreground shadow-[0_24px_60px_-35px_rgba(22,163,74,0.35)]"
@@ -706,29 +699,35 @@ export default function NewProposal() {
                 <div className="space-y-6">
                   <div className="flex items-center justify-between gap-4">
                     <div className="space-y-2">
-                      <p className={`text-xs font-semibold uppercase tracking-[0.28em] ${isListening ? "text-white/75" : "text-primary/70"}`}>
+                      <p className={`text-xs font-semibold uppercase tracking-[0.28em] ${isListening ? "text-amber-700" : "text-primary/70"}`}>
                         Voice capture
                       </p>
                       <h2 className="text-2xl font-semibold tracking-tight">
-                        {isTranscribing ? "Turning your recording into notes" : isListening ? "Recording the job details now" : "Tap once and describe the scope"}
+                        {isTranscribing
+                          ? "Turning your recording into notes"
+                          : isListening
+                          ? "Tap to stop recording"
+                          : hasRecordedScope
+                          ? "Tap to record more"
+                          : "Tap to start recording"}
                       </h2>
                     </div>
-                    <div className={`flex h-16 w-16 items-center justify-center rounded-full ${isListening ? "bg-white/15" : "bg-primary/10"}`}>
+                    <div className={`flex h-16 w-16 items-center justify-center rounded-full ${isListening ? "bg-amber-200 animate-pulse" : "bg-primary/10"}`}>
                       {isTranscribing ? (
                         <Loader2 className="h-7 w-7 animate-spin" />
                       ) : isListening ? (
-                        <MicOff className="h-7 w-7" />
+                        <MicOff className="h-7 w-7 text-amber-700" />
                       ) : (
                         <Mic className="h-7 w-7 text-primary" />
                       )}
                     </div>
                   </div>
-                  <div className={`rounded-2xl border px-4 py-4 ${isListening ? "border-white/15 bg-white/10" : "border-primary/10 bg-background/75"}`}>
+                  <div className={`rounded-2xl border px-4 py-4 ${isListening ? "border-amber-200 bg-amber-100/60" : "border-primary/10 bg-background/75"}`}>
                     <p className="text-sm leading-6">
                       {isTranscribing
                         ? "Please wait while the recording is transcribed and added to the project description."
                         : isListening
-                        ? "Tap again when you finish. The transcript will be appended to the scope notes below."
+                        ? "Tap this button again when you're done. Your words will be added to the notes below."
                         : "Example: replace the old deck with a new 16x20 composite deck, black aluminum railings, Trex boards, around $18,000, completed in three weeks."}
                     </p>
                   </div>
@@ -785,7 +784,6 @@ export default function NewProposal() {
                   customerName={proposal.customerName}
                   customerEmail={proposal.customerEmail || undefined}
                   jobAddress={proposal.jobAddress || undefined}
-                  className="max-h-[420px]"
                 />
 
                 <div className="space-y-2 rounded-2xl border border-border/80 bg-background px-4 py-4">
@@ -802,17 +800,7 @@ export default function NewProposal() {
           )}
 
           {step === "confirm" && proposal && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Final confidence check</p>
-                <h1 className="text-3xl font-semibold tracking-tight">
-                  {form.mode === "proposal_email" ? "Confirm the send package." : "Confirm the saved proposal."}
-                </h1>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Review the customer-facing document and, if you are sending email, the exact message the customer will receive.
-                </p>
-              </div>
-
+            <div className="space-y-4">
               {submitError && (
                 <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-4 text-sm text-destructive">
                   {submitError}
@@ -830,7 +818,6 @@ export default function NewProposal() {
                   customerName={proposal.customerName}
                   customerEmail={proposal.customerEmail || undefined}
                   jobAddress={proposal.jobAddress || undefined}
-                  className="max-h-[360px]"
                 />
               </div>
 
@@ -1010,8 +997,12 @@ export default function NewProposal() {
 
                 <Button
                   data-testid="button-chat-voice-footer"
-                  variant={isChatListening ? "destructive" : "secondary"}
-                  className="h-13 w-auto min-w-[220px] rounded-2xl border border-primary/15 bg-primary/8 px-5 text-[15px] font-semibold text-primary shadow-[0_10px_20px_-18px_rgba(22,101,52,0.35)]"
+                  variant="secondary"
+                  className={`h-13 w-auto min-w-[220px] rounded-2xl px-5 text-[15px] font-semibold shadow-[0_10px_20px_-18px_rgba(22,101,52,0.35)] ${
+                    isChatListening
+                      ? "border border-amber-300 bg-amber-50 text-amber-900"
+                      : "border border-primary/15 bg-primary/8 text-primary"
+                  }`}
                   onClick={toggleChatVoice}
                   disabled={refineMutation.isPending || isChatTranscribing}
                 >
@@ -1023,7 +1014,7 @@ export default function NewProposal() {
                   ) : isChatListening ? (
                     <>
                       <MicOff className="mr-2 h-5 w-5" />
-                      Finish voice change
+                      Tap to stop recording
                     </>
                   ) : (
                     <>

@@ -56,6 +56,8 @@ export default function ProposalDetail() {
   const qc = useQueryClient();
 
   const [editedText, setEditedText] = useState("");
+  const [editedEmailSubject, setEditedEmailSubject] = useState("");
+  const [editedEmailBody, setEditedEmailBody] = useState("");
   const [finalizeResult, setFinalizeResult] = useState<FinalizeResult | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [showTypedAiInput, setShowTypedAiInput] = useState(false);
@@ -67,6 +69,8 @@ export default function ProposalDetail() {
     queryKey: ["/api/proposals", id],
     select: (record: Proposal) => {
       if (!editedText && record?.proposalText) setEditedText(record.proposalText);
+      if (!editedEmailSubject && record?.emailSubject) setEditedEmailSubject(record.emailSubject);
+      if (!editedEmailBody && record?.emailBody) setEditedEmailBody(record.emailBody);
       return record;
     },
   });
@@ -105,7 +109,11 @@ export default function ProposalDetail() {
 
   const finalizeMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("PATCH", `/api/proposals/${id}`, { proposalText: editedText });
+      await apiRequest("PATCH", `/api/proposals/${id}`, {
+        proposalText: editedText,
+        emailSubject: editedEmailSubject || undefined,
+        emailBody: editedEmailBody || undefined,
+      });
       const res = await apiRequest("POST", `/api/proposals/${id}/finalize`);
       return (await res.json()) as FinalizeResult;
     },
@@ -247,7 +255,6 @@ export default function ProposalDetail() {
                   customerName={proposal.customerName}
                   customerEmail={proposal.customerEmail || undefined}
                   jobAddress={proposal.jobAddress || undefined}
-                  className="max-h-[420px]"
                 />
 
                 {isEditable && (
@@ -320,6 +327,31 @@ export default function ProposalDetail() {
                         Edit, then save again.
                       </div>
                     )}
+
+                    {proposal.mode === "proposal_email" && (
+                      <div className="space-y-3 rounded-2xl border border-border/80 bg-muted/40 px-4 py-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Outgoing email</p>
+                        <div>
+                          <p className="mb-1.5 text-sm font-medium">Subject line</p>
+                          <Input
+                            data-testid="input-detail-email-subject"
+                            className="h-11 rounded-2xl"
+                            value={editedEmailSubject}
+                            onChange={(event) => setEditedEmailSubject(event.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <p className="mb-1.5 text-sm font-medium">Email body</p>
+                          <Textarea
+                            data-testid="textarea-detail-email-body"
+                            className="min-h-[140px] rounded-[20px] leading-7 resize-none"
+                            value={editedEmailBody}
+                            onChange={(event) => setEditedEmailBody(event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     <Button
                       data-testid="button-save-edits"
                       onClick={() => saveMutation.mutate()}
@@ -364,8 +396,12 @@ export default function ProposalDetail() {
 
               <Button
                 data-testid="button-detail-chat-voice"
-                variant={isChatListening ? "destructive" : "secondary"}
-                className="h-13 w-auto min-w-[220px] rounded-2xl border border-primary/15 bg-primary/8 px-5 text-[15px] font-semibold text-primary shadow-[0_10px_20px_-18px_rgba(22,101,52,0.35)]"
+                variant="secondary"
+                className={`h-13 w-auto min-w-[220px] rounded-2xl px-5 text-[15px] font-semibold shadow-[0_10px_20px_-18px_rgba(22,101,52,0.35)] ${
+                  isChatListening
+                    ? "border border-amber-300 bg-amber-50 text-amber-900"
+                    : "border border-primary/15 bg-primary/8 text-primary"
+                }`}
                 onClick={toggleChatVoice}
                 disabled={refineMutation.isPending || isChatTranscribing}
               >
@@ -377,7 +413,7 @@ export default function ProposalDetail() {
                 ) : isChatListening ? (
                   <>
                     <MicOff className="mr-2 h-5 w-5" />
-                    Finish voice change
+                    Tap to stop recording
                   </>
                 ) : (
                   <>

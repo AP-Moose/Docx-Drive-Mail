@@ -9,6 +9,7 @@ import {
   ExternalLink,
   FileText,
   Loader2,
+  Mail,
   MoreHorizontal,
   HardHat,
   Clock,
@@ -192,6 +193,20 @@ export default function RecentProposals() {
                     <a href={p.driveWebLink} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="w-3.5 h-3.5 mr-1" />
                       Drive
+                    </a>
+                  </Button>
+                )}
+
+                {p.gmailMessageId && (
+                  <Button
+                    data-testid={`button-sent-email-${p.id}`}
+                    size="sm"
+                    variant="secondary"
+                    asChild
+                  >
+                    <a href="https://mail.google.com/mail/#sent" target="_blank" rel="noopener noreferrer">
+                      <Mail className="w-3.5 h-3.5 mr-1" />
+                      Sent email
                     </a>
                   </Button>
                 )}
