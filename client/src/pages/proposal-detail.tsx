@@ -224,7 +224,7 @@ export default function ProposalDetail() {
       <div className="mx-auto flex min-h-screen max-w-2xl flex-col">
         <div className="bg-primary px-5 pb-6 pt-10 text-primary-foreground">
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate("/recent")} className="rounded-full p-1 text-primary-foreground/80 transition-colors hover:text-primary-foreground">
+            <button onClick={() => navigate("/")} className="rounded-full p-1 text-primary-foreground/80 transition-colors hover:text-primary-foreground">
               <ArrowLeft className="h-5 w-5" />
             </button>
             <HardHat className="h-5 w-5" />
