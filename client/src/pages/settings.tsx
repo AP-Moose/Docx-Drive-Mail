@@ -101,6 +101,7 @@ export default function Settings() {
         oauth_cancelled: "Google sign-in was cancelled.",
         token_exchange_failed: "Could not exchange the auth code for tokens.",
         oauth_failed: "Google sign-in failed. Please try again.",
+        oauth_state_mismatch: "Sign-in request could not be verified. Please try again.",
       };
       const msg = errorMap[params.get("error")!] || "Google sign-in failed.";
       toast({ title: "Connection failed", description: msg, variant: "destructive" });

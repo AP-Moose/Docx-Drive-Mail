@@ -1,6 +1,8 @@
 import express from "express";
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import { randomBytes } from "crypto";
+import { parse as parseCookies } from "cookie";
 import { storage } from "./storage";
 import { generateProposal, refineProposal } from "./ai";
 import { generateDocx } from "./docx-generator";
@@ -63,6 +65,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!clientId) {
       return res.redirect("/settings?error=oauth_not_configured");
     }
+    const state = randomBytes(16).toString("hex");
+    res.cookie("oauth_state", state, {
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 10 * 60 * 1000,
+      secure: req.headers["x-forwarded-proto"] === "https",
+    });
     const redirectUri = `${getRedirectBase(req)}/auth/google/callback`;
     const scopes = [
       "openid",
@@ -80,6 +89,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         scope: scopes.join(" "),
         access_type: "offline",
         prompt: "consent",
+        state,
       }).toString();
     res.redirect(url);
   });
@@ -87,8 +97,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/auth/google/callback", async (req: Request, res: Response) => {
     const code = req.query.code as string | undefined;
     const oauthError = req.query.error as string | undefined;
+    const returnedState = req.query.state as string | undefined;
+    const cookies = parseCookies(req.headers.cookie ?? "");
+    const expectedState = cookies.oauth_state;
+
+    res.clearCookie("oauth_state");
+
     if (oauthError || !code) {
       return res.redirect(`/settings?error=${oauthError ?? "oauth_cancelled"}`);
+    }
+
+    if (!returnedState || !expectedState || returnedState !== expectedState) {
+      console.warn("OAuth state mismatch — possible CSRF attempt");
+      return res.redirect("/settings?error=oauth_state_mismatch");
     }
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
