@@ -22,6 +22,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 function statusColor(status: string) {
   switch (status) {
@@ -58,6 +68,7 @@ export default function RecentProposals() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
 
   const { data: proposals, isLoading } = useQuery<Proposal[]>({
     queryKey: ["/api/proposals"],
@@ -101,6 +112,19 @@ export default function RecentProposals() {
         });
       }, 50);
       window.setTimeout(() => setHighlightedId((current) => (current === p.id ? null : current)), 2400);
+    },
+    onError: (e: any) => {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/proposals/${id}`);
+    },
+    onSuccess: async () => {
+      toast({ title: "Proposal deleted", description: "The proposal has been removed from your history." });
+      await qc.invalidateQueries({ queryKey: ["/api/proposals"] });
     },
     onError: (e: any) => {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -230,6 +254,13 @@ export default function RecentProposals() {
                     >
                       Duplicate
                     </DropdownMenuItem>
+                    <DropdownMenuItem
+                      data-testid={`button-delete-${p.id}`}
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => setDeleteTargetId(p.id)}
+                    >
+                      Delete
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -237,6 +268,34 @@ export default function RecentProposals() {
           ))}
         </div>
       </div>
+
+      <AlertDialog open={deleteTargetId !== null} onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this proposal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the proposal from this app only. It does not unsend the email or delete the file from Google Drive.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-delete-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="button-delete-confirm"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (deleteTargetId !== null) {
+                  deleteMutation.mutate(deleteTargetId, {
+                    onSettled: () => setDeleteTargetId(null),
+                  });
+                }
+              }}
+            >
+              {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
