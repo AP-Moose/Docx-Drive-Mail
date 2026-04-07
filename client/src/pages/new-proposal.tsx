@@ -1019,7 +1019,7 @@ export default function NewProposal() {
                   ) : (
                     <>
                       <Mic className="mr-2 h-5 w-5" />
-                      Tap once and describe the change
+                      Tap to start recording
                     </>
                   )}
                 </Button>

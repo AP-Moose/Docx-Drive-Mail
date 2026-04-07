@@ -1,27 +1,25 @@
 import { useLocation } from "wouter";
-import { Clock, FileText, HardHat, Plus, Settings } from "lucide-react";
+import { Clock, FileText, Plus, Settings } from "lucide-react";
+import logoPath from "@assets/logo.png";
 
 export default function Home() {
   const [, navigate] = useLocation();
 
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-2xl mx-auto">
-      <div className="bg-primary px-6 pb-10 pt-12 text-primary-foreground">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="rounded-full border border-white/15 bg-white/10 p-3">
-            <HardHat className="h-7 w-7" />
+      <div className="bg-primary px-5 pt-8 pb-5 text-primary-foreground">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-white/95 px-2 py-1.5 shadow-sm">
+            <img src={logoPath} alt="Inspiring Services" className="h-7 w-auto" />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary-foreground/70">Inspiring Services</p>
-            <h1 className="text-3xl font-semibold tracking-tight">Proposal Builder</h1>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-primary-foreground/70">Inspiring Services</p>
+            <h1 className="text-lg font-bold leading-tight">Proposal Builder</h1>
           </div>
         </div>
-        <p className="max-w-md text-sm leading-6 text-primary-foreground/80">
-          Build the proposal, save it to Drive, and send it out.
-        </p>
       </div>
 
-      <div className="flex-1 px-5 pb-8 pt-6">
+      <div className="flex-1 px-5 pb-4 pt-5">
         <div className="space-y-4 rounded-[34px] bg-white/96 p-4 shadow-[0_40px_90px_-50px_rgba(15,23,42,0.55)]">
           <button
             data-testid="button-new-proposal"
@@ -74,7 +72,36 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="px-5 pb-8">
+      <div className="px-5 pb-4">
+        <div className="rounded-[28px] border border-border/60 bg-card px-5 py-5">
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">How it works</p>
+          <div className="space-y-5">
+            <div className="flex gap-4 items-start">
+              <span className="min-w-[2rem] text-xl font-bold text-primary/25 leading-none">01</span>
+              <div>
+                <p className="font-semibold leading-snug">Add the customer</p>
+                <p className="text-sm text-muted-foreground mt-0.5">Name, email, and address. Takes seconds.</p>
+              </div>
+            </div>
+            <div className="flex gap-4 items-start">
+              <span className="min-w-[2rem] text-xl font-bold text-primary/25 leading-none">02</span>
+              <div>
+                <p className="font-semibold leading-snug">Say the job</p>
+                <p className="text-sm text-muted-foreground mt-0.5">Speak the scope out loud. AI builds the proposal.</p>
+              </div>
+            </div>
+            <div className="flex gap-4 items-start">
+              <span className="min-w-[2rem] text-xl font-bold text-primary/25 leading-none">03</span>
+              <div>
+                <p className="font-semibold leading-snug">Review and send</p>
+                <p className="text-sm text-muted-foreground mt-0.5">Check everything, then send with one tap.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-5 pb-6">
         <button
           data-testid="button-settings"
           onClick={() => navigate("/settings")}
