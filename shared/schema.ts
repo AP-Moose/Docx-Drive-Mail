@@ -69,3 +69,25 @@ export const insertProposalSchema = z.object({
 
 export type InsertProposal = z.infer<typeof insertProposalSchema>;
 export type Proposal = typeof proposals.$inferSelect;
+
+export const googleTokens = pgTable("google_tokens", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token"),
+  tokenExpiry: timestamp("token_expiry"),
+  email: text("email"),
+  scope: text("scope"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export type GoogleToken = typeof googleTokens.$inferSelect;
+
+export const insertGoogleTokenSchema = z.object({
+  accessToken: z.string(),
+  refreshToken: z.string().nullable().optional(),
+  tokenExpiry: z.date().nullable().optional(),
+  email: z.string().nullable().optional(),
+  scope: z.string().nullable().optional(),
+});
+export type InsertGoogleToken = z.infer<typeof insertGoogleTokenSchema>;

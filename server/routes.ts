@@ -38,7 +38,111 @@ function buildFinalizeResponse(proposal: Proposal) {
   };
 }
 
+function getRedirectBase(req: Request): string {
+  const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol;
+  return `${proto}://${req.get("host")}`;
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  // ─── Google OAuth Routes ──────────────────────────────────────────────────
+  app.get("/auth/google", (req: Request, res: Response) => {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      return res.redirect("/settings?error=oauth_not_configured");
+    }
+    const redirectUri = `${getRedirectBase(req)}/auth/google/callback`;
+    const scopes = [
+      "openid",
+      "email",
+      "profile",
+      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/gmail.send",
+    ];
+    const url =
+      "https://accounts.google.com/o/oauth2/v2/auth?" +
+      new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: scopes.join(" "),
+        access_type: "offline",
+        prompt: "consent",
+      }).toString();
+    res.redirect(url);
+  });
+
+  app.get("/auth/google/callback", async (req: Request, res: Response) => {
+    const { code, error } = req.query as { code?: string; error?: string };
+    if (error || !code) {
+      return res.redirect(`/settings?error=${error || "oauth_cancelled"}`);
+    }
+
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return res.redirect("/settings?error=oauth_not_configured");
+    }
+
+    try {
+      const redirectUri = `${getRedirectBase(req)}/auth/google/callback`;
+
+      const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
+          grant_type: "authorization_code",
+        }),
+      });
+
+      const tokens = (await tokenResp.json()) as any;
+      if (!tokens.access_token) {
+        console.error("Token exchange failed:", tokens);
+        return res.redirect("/settings?error=token_exchange_failed");
+      }
+
+      let email: string | null = null;
+      try {
+        const userResp = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+          headers: { Authorization: `Bearer ${tokens.access_token}` },
+        });
+        const user = (await userResp.json()) as any;
+        email = user.email || null;
+      } catch {
+        // Non-fatal — email is cosmetic
+      }
+
+      const tokenExpiry = tokens.expires_in
+        ? new Date(Date.now() + tokens.expires_in * 1000)
+        : null;
+
+      await storage.upsertGoogleToken({
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token || null,
+        tokenExpiry,
+        email,
+        scope: tokens.scope || null,
+      });
+
+      res.redirect("/settings?connected=true");
+    } catch (e) {
+      console.error("OAuth callback error:", e);
+      res.redirect("/settings?error=oauth_failed");
+    }
+  });
+
+  app.post("/auth/google/disconnect", async (_req: Request, res: Response) => {
+    try {
+      await storage.deleteGoogleToken();
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to disconnect" });
+    }
+  });
+
   // ─── Status ────────────────────────────────────────────────────────────────
   app.get("/api/status", (_req: Request, res: Response) => {
     res.json({

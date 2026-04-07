@@ -35,5 +35,5 @@ export function hasDatabaseConfig() {
 }
 
 export function hasGoogleOAuthConfig() {
-  return false;
+  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }

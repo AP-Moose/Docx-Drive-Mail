@@ -1,22 +1,21 @@
 /**
- * Gmail integration via Replit Connectors + googleapis
- * Connection ID: conn_google-mail_01KK75AGEXV5QPJPD5F7YKR8AT
- *
- * Available scope: gmail.send — sends email directly (no draft creation possible)
+ * Gmail integration.
+ * Prefers in-app OAuth token (stored in DB) when available.
+ * Falls back to Replit Connectors if no in-app token exists.
  * WARNING: Never cache the Gmail client — access tokens expire.
  */
 import { google } from "googleapis";
-import { getGoogleProviderMode } from "./google-auth";
+import { getStoredAccessToken, hasStoredToken, getStoredTokenEmail } from "./google-token";
 
-let connectionSettings: any;
+let replitConnectionSettings: any;
 
-async function getAccessToken() {
+async function getReplitAccessToken(): Promise<string> {
   if (
-    connectionSettings &&
-    connectionSettings.settings?.expires_at &&
-    new Date(connectionSettings.settings.expires_at).getTime() > Date.now()
+    replitConnectionSettings &&
+    replitConnectionSettings.settings?.expires_at &&
+    new Date(replitConnectionSettings.settings.expires_at).getTime() > Date.now()
   ) {
-    return connectionSettings.settings.access_token;
+    return replitConnectionSettings.settings.access_token;
   }
 
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
@@ -29,26 +28,27 @@ async function getAccessToken() {
   if (!xReplitToken) throw new Error("X-Replit-Token not found");
   if (!hostname) throw new Error("GMAIL_NOT_CONNECTED");
 
-  connectionSettings = await fetch(
+  replitConnectionSettings = await fetch(
     `https://${hostname}/api/v2/connection?include_secrets=true&connector_names=google-mail`,
     {
-      headers: {
-        Accept: "application/json",
-        "X-Replit-Token": xReplitToken,
-      },
+      headers: { Accept: "application/json", "X-Replit-Token": xReplitToken },
     }
   )
     .then((r) => r.json())
     .then((data: any) => data.items?.[0]);
 
   const accessToken =
-    connectionSettings?.settings?.access_token ||
-    connectionSettings?.settings?.oauth?.credentials?.access_token;
+    replitConnectionSettings?.settings?.access_token ||
+    replitConnectionSettings?.settings?.oauth?.credentials?.access_token;
 
-  if (!connectionSettings || !accessToken) {
-    throw new Error("GMAIL_NOT_CONNECTED");
-  }
+  if (!replitConnectionSettings || !accessToken) throw new Error("GMAIL_NOT_CONNECTED");
   return accessToken;
+}
+
+async function getAccessToken(): Promise<string> {
+  const storedToken = await getStoredAccessToken();
+  if (storedToken) return storedToken;
+  return getReplitAccessToken();
 }
 
 async function getUncachableGmailClient() {
@@ -59,7 +59,7 @@ async function getUncachableGmailClient() {
 }
 
 export function isGmailConnected(): boolean {
-  return getGoogleProviderMode() !== "none";
+  return !!(process.env.GOOGLE_CLIENT_ID || process.env.REPLIT_CONNECTORS_HOSTNAME);
 }
 
 export async function testGmailConnection(): Promise<boolean> {
@@ -73,6 +73,8 @@ export async function testGmailConnection(): Promise<boolean> {
 
 export async function getGmailUserEmail(): Promise<string | null> {
   try {
+    const storedEmail = await getStoredTokenEmail();
+    if (storedEmail) return storedEmail;
     const accessToken = await getAccessToken();
     const resp = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -97,14 +99,13 @@ function buildMimeMessage(to: string, subject: string, bodyText: string): string
     ``,
     bodyText,
   ].join("\r\n");
-
   return toBase64Url(Buffer.from(raw));
 }
 
 export async function sendGmailMessage(
   to: string,
   subject: string,
-  bodyText: string,
+  bodyText: string
 ): Promise<{ messageId: string }> {
   if (!isGmailConnected()) throw new Error("GMAIL_NOT_CONNECTED");
 
