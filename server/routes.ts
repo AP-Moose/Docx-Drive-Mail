@@ -178,6 +178,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── PIN Auth ─────────────────────────────────────────────────────────────
+  app.post("/api/auth/pin", (req: Request, res: Response) => {
+    const appPin = process.env.APP_PIN;
+    if (!appPin) {
+      return res.json({ success: true, pinRequired: false });
+    }
+    const { pin } = req.body as { pin?: string };
+    if (!pin) {
+      return res.status(400).json({ success: false, error: "PIN required" });
+    }
+    if (pin === appPin) {
+      return res.json({ success: true, pinRequired: true });
+    }
+    return res.json({ success: false, pinRequired: true, error: "Incorrect PIN" });
+  });
+
   // ─── Status ────────────────────────────────────────────────────────────────
   app.get("/api/status", async (_req: Request, res: Response) => {
     const [drive, gmail] = await Promise.all([isDriveConnected(), isGmailConnected()]);
