@@ -7,6 +7,13 @@ import { storage } from "./storage";
 
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
+interface TokenRefreshResponse {
+  access_token?: string;
+  expires_in?: number;
+  error?: string;
+  error_description?: string;
+}
+
 export async function getStoredAccessToken(): Promise<string | null> {
   let token;
   try {
@@ -45,7 +52,7 @@ async function refreshAccessToken(tokenId: number, refreshToken: string): Promis
       }),
     });
 
-    const data = (await resp.json()) as any;
+    const data: TokenRefreshResponse = await resp.json() as TokenRefreshResponse;
     if (!data.access_token) {
       console.error("Token refresh failed:", data);
       return null;
@@ -71,7 +78,7 @@ export async function hasStoredToken(): Promise<boolean> {
 export async function getStoredTokenEmail(): Promise<string | null> {
   try {
     const token = await storage.getGoogleToken();
-    return token?.email || null;
+    return token?.email ?? null;
   } catch {
     return null;
   }

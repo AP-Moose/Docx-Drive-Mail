@@ -7,47 +7,70 @@
 import { google } from "googleapis";
 import { getStoredAccessToken, hasStoredToken, getStoredTokenEmail } from "./google-token";
 
-let replitConnectionSettings: any;
+interface ConnectorSettings {
+  access_token?: string;
+  expires_at?: string;
+  oauth?: { credentials?: { access_token?: string } };
+}
+
+interface ConnectorItem {
+  settings?: ConnectorSettings;
+}
+
+interface ConnectorListResponse {
+  items?: ConnectorItem[];
+}
+
+interface GoogleUserInfo {
+  email?: string;
+}
+
+let cachedReplitConnectorItem: ConnectorItem | null = null;
 
 async function getReplitAccessToken(): Promise<string> {
   if (
-    replitConnectionSettings &&
-    replitConnectionSettings.settings?.expires_at &&
-    new Date(replitConnectionSettings.settings.expires_at).getTime() > Date.now()
+    cachedReplitConnectorItem?.settings?.expires_at &&
+    new Date(cachedReplitConnectorItem.settings.expires_at).getTime() > Date.now()
   ) {
-    return replitConnectionSettings.settings.access_token;
+    const token =
+      cachedReplitConnectorItem.settings.access_token ??
+      cachedReplitConnectorItem.settings.oauth?.credentials?.access_token;
+    if (token) return token;
   }
 
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY
-    ? "repl " + process.env.REPL_IDENTITY
-    : process.env.WEB_REPL_RENEWAL
-    ? "depl " + process.env.WEB_REPL_RENEWAL
-    : null;
-
-  if (!xReplitToken) throw new Error("X-Replit-Token not found");
   if (!hostname) throw new Error("GMAIL_NOT_CONNECTED");
 
-  replitConnectionSettings = await fetch(
+  const xReplitToken =
+    process.env.REPL_IDENTITY
+      ? `repl ${process.env.REPL_IDENTITY}`
+      : process.env.WEB_REPL_RENEWAL
+        ? `depl ${process.env.WEB_REPL_RENEWAL}`
+        : null;
+
+  if (!xReplitToken) throw new Error("GMAIL_NOT_CONNECTED");
+
+  const resp = await fetch(
     `https://${hostname}/api/v2/connection?include_secrets=true&connector_names=google-mail`,
-    {
-      headers: { Accept: "application/json", "X-Replit-Token": xReplitToken },
-    }
-  )
-    .then((r) => r.json())
-    .then((data: any) => data.items?.[0]);
+    { headers: { Accept: "application/json", "X-Replit-Token": xReplitToken } }
+  );
+  const data: ConnectorListResponse = await resp.json() as ConnectorListResponse;
+  cachedReplitConnectorItem = data.items?.[0] ?? null;
 
   const accessToken =
-    replitConnectionSettings?.settings?.access_token ||
-    replitConnectionSettings?.settings?.oauth?.credentials?.access_token;
+    cachedReplitConnectorItem?.settings?.access_token ??
+    cachedReplitConnectorItem?.settings?.oauth?.credentials?.access_token;
 
-  if (!replitConnectionSettings || !accessToken) throw new Error("GMAIL_NOT_CONNECTED");
+  if (!cachedReplitConnectorItem || !accessToken) throw new Error("GMAIL_NOT_CONNECTED");
   return accessToken;
 }
 
 async function getAccessToken(): Promise<string> {
   const storedToken = await getStoredAccessToken();
   if (storedToken) return storedToken;
+
+  // Only attempt Replit connector fallback when env is configured
+  if (!process.env.REPLIT_CONNECTORS_HOSTNAME) throw new Error("GMAIL_NOT_CONNECTED");
   return getReplitAccessToken();
 }
 
@@ -58,8 +81,10 @@ async function getUncachableGmailClient() {
   return google.gmail({ version: "v1", auth: oauth2Client });
 }
 
-export function isGmailConnected(): boolean {
-  return !!(process.env.GOOGLE_CLIENT_ID || process.env.REPLIT_CONNECTORS_HOSTNAME);
+export async function isGmailConnected(): Promise<boolean> {
+  const hasToken = await hasStoredToken();
+  if (hasToken) return true;
+  return !!process.env.REPLIT_CONNECTORS_HOSTNAME;
 }
 
 export async function testGmailConnection(): Promise<boolean> {
@@ -79,8 +104,8 @@ export async function getGmailUserEmail(): Promise<string | null> {
     const resp = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    const data = (await resp.json()) as any;
-    return data.email || null;
+    const data: GoogleUserInfo = await resp.json() as GoogleUserInfo;
+    return data.email ?? null;
   } catch {
     return null;
   }
@@ -107,7 +132,8 @@ export async function sendGmailMessage(
   subject: string,
   bodyText: string
 ): Promise<{ messageId: string }> {
-  if (!isGmailConnected()) throw new Error("GMAIL_NOT_CONNECTED");
+  const connected = await isGmailConnected();
+  if (!connected) throw new Error("GMAIL_NOT_CONNECTED");
 
   const gmail = await getUncachableGmailClient();
   const raw = buildMimeMessage(to, subject, bodyText);

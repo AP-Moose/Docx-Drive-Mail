@@ -6,8 +6,40 @@
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import { getStoredAccessToken, hasStoredToken, getStoredTokenEmail } from "./google-token";
 
-export function isDriveConnected(): boolean {
-  return !!(process.env.GOOGLE_CLIENT_ID || process.env.REPLIT_CONNECTORS_HOSTNAME);
+interface DriveAbout {
+  user?: { emailAddress?: string };
+  error?: { message?: string };
+}
+
+interface DriveFileRef {
+  id?: string;
+}
+
+interface DriveFileList {
+  files?: DriveFileRef[];
+  error?: { message?: string };
+}
+
+interface DriveFileCreated {
+  id?: string;
+  webViewLink?: string;
+  error?: { message?: string };
+}
+
+interface DrivePermission {
+  error?: { message?: string };
+}
+
+interface DriveUploadCreated {
+  id?: string;
+  webViewLink?: string;
+  error?: { message?: string };
+}
+
+export async function isDriveConnected(): Promise<boolean> {
+  const hasToken = await hasStoredToken();
+  if (hasToken) return true;
+  return !!process.env.REPLIT_CONNECTORS_HOSTNAME;
 }
 
 export async function testDriveConnection(): Promise<boolean> {
@@ -17,13 +49,13 @@ export async function testDriveConnection(): Promise<boolean> {
       const resp = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {
         headers: { Authorization: `Bearer ${storedToken}` },
       });
-      const data = (await resp.json()) as any;
+      const data: DriveAbout = await resp.json() as DriveAbout;
       return !!data.user;
     }
     if (!process.env.REPLIT_CONNECTORS_HOSTNAME) return false;
     const connectors = getConnectors();
     const resp = await connectors.proxy("google-drive", "/drive/v3/about?fields=user", { method: "GET" });
-    const data = (await resp.json()) as any;
+    const data: DriveAbout = await resp.json() as DriveAbout;
     return !!data.user;
   } catch {
     return false;
@@ -37,8 +69,8 @@ export async function getDriveUserEmail(): Promise<string | null> {
     if (!process.env.REPLIT_CONNECTORS_HOSTNAME) return null;
     const connectors = getConnectors();
     const resp = await connectors.proxy("google-drive", "/drive/v3/about?fields=user(emailAddress)", { method: "GET" });
-    const data = (await resp.json()) as any;
-    return data.user?.emailAddress || null;
+    const data: DriveAbout = await resp.json() as DriveAbout;
+    return data.user?.emailAddress ?? null;
   } catch {
     return null;
   }
@@ -48,10 +80,7 @@ function getConnectors() {
   return new ReplitConnectors();
 }
 
-/**
- * Unified Drive API request — uses in-app token when available, Replit connector otherwise.
- */
-async function driveRequest(endpoint: string, options: RequestInit & { body?: any }): Promise<any> {
+async function driveRequest<T>(endpoint: string, options: RequestInit & { body?: unknown }): Promise<T> {
   const storedToken = await getStoredAccessToken();
   if (storedToken) {
     const headers: Record<string, string> = {
@@ -62,20 +91,17 @@ async function driveRequest(endpoint: string, options: RequestInit & { body?: an
       ...options,
       headers,
     });
-    return resp.json();
+    return resp.json() as Promise<T>;
   }
   if (!process.env.REPLIT_CONNECTORS_HOSTNAME) {
     throw new Error("GOOGLE_DRIVE_NOT_CONNECTED");
   }
   const connectors = getConnectors();
-  const resp = await connectors.proxy("google-drive", endpoint, options as any);
-  return resp.json();
+  const resp = await connectors.proxy("google-drive", endpoint, options as Parameters<typeof connectors.proxy>[2]);
+  return resp.json() as Promise<T>;
 }
 
-/**
- * Upload variant that returns the raw Response (for multipart body).
- */
-async function driveRequestRaw(endpoint: string, options: RequestInit & { body?: any }): Promise<Response> {
+async function driveRequestRaw(endpoint: string, options: RequestInit & { body?: unknown }): Promise<Response> {
   const storedToken = await getStoredAccessToken();
   if (storedToken) {
     const headers: Record<string, string> = {
@@ -88,7 +114,7 @@ async function driveRequestRaw(endpoint: string, options: RequestInit & { body?:
     throw new Error("GOOGLE_DRIVE_NOT_CONNECTED");
   }
   const connectors = getConnectors();
-  return connectors.proxy("google-drive", endpoint, options as any);
+  return connectors.proxy("google-drive", endpoint, options as Parameters<typeof connectors.proxy>[2]);
 }
 
 async function findFolder(name: string, parentId: string | null): Promise<string | null> {
@@ -96,15 +122,18 @@ async function findFolder(name: string, parentId: string | null): Promise<string
   const q = encodeURIComponent(
     `mimeType='application/vnd.google-apps.folder' and name='${name}' and trashed=false${parentQuery}`
   );
-  const data = await driveRequest(`/drive/v3/files?q=${q}&fields=files(id)`, { method: "GET" });
-  if (data.files && data.files.length > 0) return data.files[0].id;
+  const data = await driveRequest<DriveFileList>(`/drive/v3/files?q=${q}&fields=files(id)`, { method: "GET" });
+  if (data.files && data.files.length > 0) return data.files[0].id ?? null;
   return null;
 }
 
 async function createFolder(name: string, parentId: string | null): Promise<string> {
-  const metadata: any = { name, mimeType: "application/vnd.google-apps.folder" };
+  const metadata: { name: string; mimeType: string; parents?: string[] } = {
+    name,
+    mimeType: "application/vnd.google-apps.folder",
+  };
   if (parentId) metadata.parents = [parentId];
-  const data = await driveRequest("/drive/v3/files?fields=id", {
+  const data = await driveRequest<DriveFileCreated>("/drive/v3/files?fields=id", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(metadata),
@@ -136,7 +165,7 @@ export async function uploadToDrive(
   mimeType: string,
   customerName?: string
 ): Promise<{ fileId: string; webViewLink: string }> {
-  const connected = await hasStoredToken() || !!process.env.REPLIT_CONNECTORS_HOSTNAME;
+  const connected = await isDriveConnected();
   if (!connected) throw new Error("GOOGLE_DRIVE_NOT_CONNECTED");
 
   let folderId: string | null = null;
@@ -147,7 +176,7 @@ export async function uploadToDrive(
   }
 
   const boundary = `proposal_builder_${Date.now()}`;
-  const metadata: any = { name: filename };
+  const metadata: { name: string; parents?: string[] } = { name: filename };
   if (folderId) metadata.parents = [folderId];
   const metadataStr = JSON.stringify(metadata);
 
@@ -169,22 +198,22 @@ export async function uploadToDrive(
         "Content-Type": `multipart/related; boundary="${boundary}"`,
         "Content-Length": body.length.toString(),
       },
-      body: body as any,
+      body: body as unknown as BodyInit,
     }
   );
 
-  const uploadData = (await uploadResp.json()) as any;
+  const uploadData: DriveUploadCreated = await uploadResp.json() as DriveUploadCreated;
   if (!uploadData.id) throw new Error(`Drive upload failed: ${JSON.stringify(uploadData)}`);
 
   return {
     fileId: uploadData.id,
-    webViewLink: uploadData.webViewLink || `https://drive.google.com/file/d/${uploadData.id}/view`,
+    webViewLink: uploadData.webViewLink ?? `https://drive.google.com/file/d/${uploadData.id}/view`,
   };
 }
 
 export async function setFilePublic(fileId: string): Promise<void> {
   try {
-    const data = await driveRequest(`/drive/v3/files/${fileId}/permissions`, {
+    const data = await driveRequest<DrivePermission>(`/drive/v3/files/${fileId}/permissions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "anyone", role: "reader" }),
