@@ -185,8 +185,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.json({ success: true, pinRequired: false });
     }
     const { pin } = req.body as { pin?: string };
-    if (!pin) {
-      return res.status(400).json({ success: false, error: "PIN required" });
+    if (!pin || !/^\d{4,6}$/.test(pin)) {
+      return res.status(400).json({ success: false, error: "PIN must be 4–6 digits" });
     }
     if (pin === appPin) {
       return res.json({ success: true, pinRequired: true });
