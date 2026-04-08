@@ -100,14 +100,15 @@ export function PinGate({ children }: PinGateProps) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <div className="bg-primary px-5 pt-10 pb-8 flex flex-col items-center gap-4">
-        <img
-          src={logoPath}
-          alt="Inspiring Services"
-          className="w-40 object-contain brightness-0 invert"
-          data-testid="img-logo"
-        />
+        <div className="bg-white rounded-2xl px-5 py-3 shadow-sm">
+          <img
+            src={logoPath}
+            alt="Inspiring Services"
+            className="w-36 object-contain"
+            data-testid="img-logo"
+          />
+        </div>
         <div className="text-center text-primary-foreground">
-          <h1 className="text-2xl font-bold">Inspiring Services</h1>
           <p className="text-sm opacity-80 mt-0.5">Proposal Builder</p>
         </div>
       </div>
