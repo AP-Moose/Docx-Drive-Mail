@@ -204,6 +204,7 @@ export default function NewProposal() {
 
   const scopeRecorderRef = useRef<MediaRecorder | null>(null);
   const chatRecorderRef = useRef<MediaRecorder | null>(null);
+  const editExactTextRef = useRef<HTMLDivElement | null>(null);
 
   const [form, setForm] = useState<FormData>({
     customerName: "",
@@ -775,7 +776,12 @@ export default function NewProposal() {
               <div className="space-y-3 rounded-[28px] border border-border/80 bg-card px-5 py-4 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.28)]">
                 <div className="flex items-center justify-between gap-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Customer view</p>
-                  <div className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">Live preview</div>
+                  <button
+                    onClick={() => editExactTextRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                    className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
+                  >
+                    Edit
+                  </button>
                 </div>
 
                 <ProposalPreview
@@ -786,7 +792,7 @@ export default function NewProposal() {
                   jobAddress={proposal.jobAddress || undefined}
                 />
 
-                <div className="space-y-2 rounded-2xl border border-border/80 bg-background px-4 py-4">
+                <div ref={editExactTextRef} className="space-y-2 rounded-2xl border border-border/80 bg-background px-4 py-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Edit exact text</p>
                   <Textarea
                     data-testid="textarea-proposal"
