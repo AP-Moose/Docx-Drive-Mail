@@ -20,10 +20,6 @@ export const appConfig = {
     "whisper-1",
   )!,
   databaseUrl: firstNonEmpty(process.env.DATABASE_URL),
-  googleDriveRootFolder: firstNonEmpty(
-    process.env.GOOGLE_DRIVE_ROOT_FOLDER,
-    "Proposal Builder",
-  )!,
 };
 
 export function hasOpenAIConfig() {

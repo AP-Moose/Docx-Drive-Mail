@@ -149,14 +149,8 @@ async function findOrCreateFolder(name: string, parentId: string | null): Promis
 }
 
 async function resolveFolder(customerName: string): Promise<string> {
-  const now = new Date();
-  const year = now.getFullYear().toString();
-  const month = now.toLocaleString("en-US", { month: "long" });
-  const rootId = await findOrCreateFolder("Proposal Builder", null);
-  const proposalsId = await findOrCreateFolder("Proposals", rootId);
-  const yearId = await findOrCreateFolder(year, proposalsId);
-  const monthId = await findOrCreateFolder(month, yearId);
-  return findOrCreateFolder(customerName, monthId);
+  const rootId = await findOrCreateFolder("Proposals", null);
+  return findOrCreateFolder(customerName, rootId);
 }
 
 export async function uploadToDrive(
