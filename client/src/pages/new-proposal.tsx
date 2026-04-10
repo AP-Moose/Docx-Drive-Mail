@@ -36,37 +36,37 @@ type Step = "info" | "guided" | "generating" | "review" | "confirm" | "saving" |
 const GUIDED_PROMPTS = [
   {
     key: "customerRequest",
-    question: "What does the customer want done?",
-    placeholder: "e.g. Replace the water heater in the garage",
-    hint: "Describe the main job in plain words.",
+    question: "What does the customer need?",
+    placeholder: "e.g. Replace the kitchen faucet and fix a slow drain under the sink",
+    hint: "Say the main job in plain words. One sentence is fine.",
     optional: false,
   },
   {
     key: "includedWork",
-    question: "What work is included?",
-    placeholder: "e.g. Remove old unit, install new 40-gal gas heater, connect lines, test everything",
-    hint: "List each task. Speak naturally — rough is fine.",
+    question: "What work will you do?",
+    placeholder: "e.g. Remove old faucet, install new Delta pull-down faucet, snake the drain, test everything",
+    hint: "List each task. Speak like you'd explain it on the phone.",
     optional: false,
   },
   {
     key: "exclusions",
-    question: "Anything excluded, uncertain, or still to be decided?",
-    placeholder: "e.g. Permit fees not included, homeowner picks the brand",
-    hint: "Optional — skip if nothing to add.",
+    question: "What's NOT included?",
+    placeholder: "e.g. Drywall repair not included. Customer is choosing the faucet brand.",
+    hint: "Optional — skip if the scope covers everything.",
     optional: true,
   },
   {
     key: "pricing",
-    question: "What is the price or price range?",
-    placeholder: "e.g. $1,800 flat, or $1,500–$2,000 depending on fixtures",
-    hint: "Rough or exact — both work fine.",
+    question: "What's the price?",
+    placeholder: "e.g. $650 flat, or between $500 and $800 depending on what we find",
+    hint: "Rough or exact is fine. Say it how you'd say it to the customer.",
     optional: true,
   },
   {
     key: "timeline",
-    question: "When can you start and how long should it take?",
-    placeholder: "e.g. Can start Monday, 1–2 days to complete",
-    hint: "Optional but helpful for the customer.",
+    question: "When do you start, and how long?",
+    placeholder: "e.g. Can start Thursday, should take about 3–4 hours",
+    hint: "Optional — helps set the customer's expectations.",
     optional: true,
   },
 ] as const;
@@ -78,7 +78,7 @@ function inferTradeType(text: string): string {
   const t = text.toLowerCase();
   if (/plumb|pipe|water.?heat|drain|toilet|faucet|fixture/.test(t)) return "PLUMBING";
   if (/electric|wir|circuit|panel|outlet|breaker/.test(t)) return "ELECTRICAL";
-  if (/paint|coat|prime|stain|color|wall/.test(t)) return "PAINTING";
+  if (/paint|coat|prime|stain|color|interior|exterior/.test(t)) return "PAINTING";
   if (/hvac|heat|cool|\bac\b|air.?condit|furnac|duct|vent/.test(t)) return "HVAC";
   if (/floor|tile|carpet|hardwood|laminate|vinyl/.test(t)) return "FLOORING";
   if (/bathroom|bath|shower|tub/.test(t)) return "BATHROOM RENOVATION";
@@ -87,17 +87,20 @@ function inferTradeType(text: string): string {
   if (/deck|fence|patio/.test(t)) return "DECK";
   if (/window|door/.test(t)) return "WINDOWS & DOORS";
   if (/drywall|patch|plaster/.test(t)) return "DRYWALL";
-  if (/handyman|repair|fix/.test(t)) return "HOME REPAIR";
+  if (/handyman|repair|fix|replace/.test(t)) return "HOME REPAIR";
   return "RENOVATION";
 }
 
 function extractBullets(text: string): string[] {
   if (!text.trim()) return [];
-  const parts = text
-    .split(/\n|(?:,\s*(?=\S))|(?:\s+and\s+(?=[a-z]))/i)
-    .map((s) => s.trim().replace(/^[-•*]\s*/, "").trim())
-    .filter((s) => s.length > 3);
-  return parts.length > 0 ? parts : [text.trim()];
+  // First try splitting on newlines (user may have typed or dictated one per line)
+  const byLine = text.split("\n").map((s) => s.trim().replace(/^[-•*]\s*/, "").trim()).filter((s) => s.length > 4);
+  if (byLine.length > 1) return byLine;
+  // Then try splitting on ", " followed by a verb-starting word
+  const byComma = text.split(/,\s+(?=[A-Za-z])/).map((s) => s.trim().replace(/^[-•*]\s*/, "").trim()).filter((s) => s.length > 4);
+  if (byComma.length > 1) return byComma;
+  // Fall back to the whole string as one bullet
+  return [text.trim()];
 }
 
 function buildDraftTitle(transcripts: Record<string, string>, jobAddress?: string): string {
@@ -113,6 +116,7 @@ function buildDraftText(transcripts: Record<string, string>): string {
 
   const parts: string[] = [];
 
+  // Use includedWork for scope if available, else fall back to customerRequest
   const scopeSource = transcripts.includedWork || transcripts.customerRequest;
   if (scopeSource) {
     parts.push("PROJECT SCOPE");
@@ -124,7 +128,9 @@ function buildDraftText(transcripts: Record<string, string>): string {
   if (transcripts.pricing) {
     parts.push("TOTAL INVESTMENT");
     parts.push("");
-    parts.push(transcripts.pricing.trim());
+    // Clean up casual pricing language for the preview
+    const price = transcripts.pricing.trim();
+    parts.push(price);
     parts.push("");
   }
 
@@ -143,6 +149,10 @@ function buildDraftText(transcripts: Record<string, string>): string {
   }
 
   if (parts.length > 0) {
+    parts.push("NEXT STEPS");
+    parts.push("");
+    parts.push("If this looks right, let us know and we'll get you on the schedule.");
+    parts.push("");
     parts.push("ACCEPTANCE OF PROPOSAL");
     parts.push("");
     parts.push("Client Name (Printed): __________________________________________");
@@ -874,16 +884,21 @@ export default function NewProposal() {
                 <div className="w-full lg:w-[420px] flex-shrink-0 space-y-3">
                   {/* Prompt card */}
                   <div className="rounded-[28px] border border-border/80 bg-card px-5 py-6 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.25)] space-y-5">
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
-                        Prompt {guidedStepIndex + 1}
-                      </p>
-                      <h2 className="text-xl font-semibold tracking-tight leading-snug">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+                          Step {guidedStepIndex + 1} of {GUIDED_PROMPTS.length}
+                        </p>
+                        {currentPrompt.optional && (
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                            Optional
+                          </span>
+                        )}
+                      </div>
+                      <h2 className="text-[22px] font-semibold tracking-tight leading-snug">
                         {currentPrompt.question}
                       </h2>
-                      {currentPrompt.hint && (
-                        <p className="text-sm text-muted-foreground">{currentPrompt.hint}</p>
-                      )}
+                      <p className="text-sm text-muted-foreground">{currentPrompt.hint}</p>
                     </div>
 
                     {/* Voice button */}
@@ -1029,9 +1044,12 @@ export default function NewProposal() {
                 <div className="w-full flex-1 min-w-0">
                   {hasDraftContent ? (
                     <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70 px-1">
-                        Live draft preview
-                      </p>
+                      <div className="flex items-center gap-2 px-1">
+                        <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+                          Proposal preview — updates as you talk
+                        </p>
+                      </div>
                       <ProposalPreview
                         title={draftTitle}
                         text={draftText}
@@ -1041,15 +1059,15 @@ export default function NewProposal() {
                       />
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-border/60 bg-muted/20 px-6 py-14 text-center">
-                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                        <Mic className="h-5 w-5 text-primary/60" />
+                    <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-border/50 bg-muted/15 px-6 py-12 text-center">
+                      <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/8">
+                        <Mic className="h-5 w-5 text-primary/50" />
                       </div>
-                      <p className="text-sm font-medium text-muted-foreground">
-                        Your proposal preview will appear here
+                      <p className="text-sm font-semibold text-muted-foreground">
+                        Proposal preview appears here
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground/70">
-                        It updates as you answer each prompt
+                      <p className="mt-1 text-xs text-muted-foreground/60">
+                        Tap the mic and start talking — it updates live
                       </p>
                     </div>
                   )}

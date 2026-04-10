@@ -18,51 +18,6 @@ export interface GeneratedProposal {
   projectType: string;
 }
 
-function parseStructuredNotes(scopeNotes: string): {
-  customerRequest?: string;
-  includedWork?: string;
-  exclusions?: string;
-  pricing?: string;
-  timeline?: string;
-  raw: string;
-} {
-  const sections: Record<string, string> = {};
-  const sectionLabels: Record<string, string> = {
-    "CUSTOMER REQUEST": "customerRequest",
-    "INCLUDED WORK": "includedWork",
-    "EXCLUSIONS / ASSUMPTIONS": "exclusions",
-    "PRICING": "pricing",
-    "TIMELINE": "timeline",
-  };
-
-  let currentKey: string | null = null;
-  const lines = scopeNotes.split("\n");
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    let matched = false;
-    for (const [label, key] of Object.entries(sectionLabels)) {
-      if (trimmed === `${label}:` || trimmed.startsWith(`${label}:\n`)) {
-        currentKey = key;
-        matched = true;
-        break;
-      }
-    }
-    if (!matched && currentKey) {
-      sections[currentKey] = ((sections[currentKey] || "") + "\n" + line).trim();
-    }
-  }
-
-  return { ...sections, raw: scopeNotes } as {
-    customerRequest?: string;
-    includedWork?: string;
-    exclusions?: string;
-    pricing?: string;
-    timeline?: string;
-    raw: string;
-  };
-}
-
 export async function generateProposal(
   customerName: string,
   customerEmail: string | null | undefined,
@@ -72,71 +27,83 @@ export async function generateProposal(
 ): Promise<GeneratedProposal> {
   const openai = getOpenAIClient();
 
-  const systemPrompt = `You write contractor proposals for small home service businesses.
+  const systemPrompt = `You write contractor proposals for small local home service businesses — plumbers, electricians, painters, HVAC techs, handymen, remodelers.
 
-Your job is to turn rough field notes into a clean, trustworthy proposal a homeowner can read and act on.
+Your proposals sound like a trustworthy local contractor wrote them, not like a corporate marketing team.
 
-Rules you must follow:
-- Sound like a real local contractor — direct, clear, professional but not corporate
-- No fluff, no filler, no "we are pleased to provide", no generic marketing language
-- Short sections and bullet points — not paragraphs
-- Use the contractor's own numbers and facts exactly — do not change prices, timelines, or scope
-- Do not hallucinate details that weren't mentioned
-- If something is uncertain, put it in Project Details as a note, not as a promise
-- Never use bracket placeholders like [TBD] anywhere in the proposal body
-- The only allowed bracket placeholder is [PROPOSAL_LINK] in the emailBody field
-- Keep the tone warm but to the point — like a text from a trustworthy contractor`;
+Tone rules:
+- Write the way a contractor talks: direct, clear, honest
+- No filler phrases: no "we are pleased to", no "comprehensive solution", no "industry-leading", no "best practices"
+- No throat-clearing at the start of sections
+- Short sentences. Bullets instead of paragraphs.
+- Use "we" or "I" naturally — it's one contractor writing to one homeowner
+- If something is uncertain, say so plainly. Don't paper over it.
+- Use specific numbers and details from the notes. Don't generalize.
+
+Formatting rules:
+- PROJECT SCOPE: one bullet per task. Verb-first. Specific. ("Remove old water heater", not "Water heater removal services")
+- TOTAL INVESTMENT: price on its own line. One plain sentence about what's included. Nothing more.
+- DEPOSIT SCHEDULE: standard thirds. Calculate the dollar amounts. Bullet list.
+- PROJECT DETAILS: short bullets. Timeline, exclusions, open items. Honest.
+- NEXT STEPS: 2 sentences max. What happens if they say yes. Practical. Not salesy.
+- ACCEPTANCE OF PROPOSAL: three lines exactly as shown in the example.
+
+Never use [TBD], [INSERT], or any bracket placeholders in the proposal body.
+The only allowed bracket is [PROPOSAL_LINK] in the emailBody field.`;
 
   const isStructured =
     scopeNotes.includes("CUSTOMER REQUEST:") ||
     scopeNotes.includes("INCLUDED WORK:") ||
     scopeNotes.includes("PRICING:");
 
-  const userPrompt = `Write a contractor proposal with these details:
+  const structuredNote = isStructured
+    ? "The notes are organized by topic — use each section for the matching part of the proposal."
+    : "The notes may be rough voice dictation — extract the facts and write cleanly.";
 
-Customer: ${customerName}
-${jobAddress ? `Job Address: ${jobAddress}` : ""}
+  const userPrompt = `Write a contractor proposal.
 
-${isStructured ? "Field notes (organized by topic):" : "Scope Notes from Contractor (may be rough voice dictation):"}
+Customer: ${customerName}${jobAddress ? `\nJob Address: ${jobAddress}` : ""}
+
+Contractor's notes (${structuredNote}):
 ${scopeNotes}
 
-Generate a clean, professional proposal using this EXACT structure:
+Use this exact structure and match this quality and style:
 
 ---
-BATHROOM RENOVATION PROPOSAL
+WATER HEATER REPLACEMENT PROPOSAL
 
-5200 Hilltop Dr, Brookhaven
+1847 Oak Glen Rd, Plainfield
 
 PROJECT SCOPE
 
-- Full demolition of existing bathroom
-- Remove all tile, drywall, fixtures
-- Install new cement board, tile, shower pan
-- Install customer-supplied vanity and faucet
-- Paint walls and ceiling
+- Drain and remove existing 40-gal gas water heater
+- Haul away old unit
+- Install new 40-gal Bradford White gas water heater
+- Reconnect gas line, water supply, and pressure relief valve
+- Test for leaks and verify proper operation
 
 TOTAL INVESTMENT
 
-$9,895 (Flat Rate)
+$1,450 (Flat Rate)
 
-This price includes all labor, standard installation materials, debris removal, and full project management.
+Includes all labor, fittings, and standard installation materials. Unit cost is separate if customer is supplying.
 
 DEPOSIT SCHEDULE
 
-- One-third ($3,298) due upon signing
-- One-third ($3,298) due on the first day of work
-- Final one-third ($3,299) due upon completion
+- $483 due upon signing
+- $483 due when we start
+- $484 due when the job is done
 
 PROJECT DETAILS
 
-- Estimated timeline: 5–7 working days
-- Permit fees not included — contractor will advise if required
-- Tile and fixture selections to be confirmed before ordering
-- Any structural issues found during demo will be discussed before proceeding
+- Estimated time: 3–4 hours
+- Permit may be required — we'll confirm before starting
+- If the gas shutoff valve or supply lines are corroded, replacing them is extra
+- Customer is responsible for selecting the unit if not supplied by contractor
 
 NEXT STEPS
 
-If this looks good, reply to approve and we can lock in your start date. A deposit is required before materials are ordered.
+If this looks right, let us know and we'll get you on the schedule. We'll need the deposit before we order materials.
 
 ACCEPTANCE OF PROPOSAL
 
@@ -147,25 +114,22 @@ Client Signature: ________________________________________________
 Date: _______________________
 ---
 
-Rules:
-- PROJECT SCOPE: One bullet per task. Specific. No sub-bullets.
-- TOTAL INVESTMENT: State the price clearly. One sentence about what's included.
-- DEPOSIT SCHEDULE: Split into thirds with dollar amounts. Bullet points.
-- PROJECT DETAILS: Timeline, exclusions, unknowns. Short bullets only.
-- NEXT STEPS: 2–3 sentences. Practical next action for the homeowner. Not pushy.
-- ACCEPTANCE OF PROPOSAL: Exactly as shown — three lines.
-- If multiple prices are mentioned for different areas, list them all with a combined total.
-- Do NOT add extra sections. Do NOT use [TBD] or any bracket notation.
-- Infer the trade type from the work described and use it in the title.
-- Title format: "[TRADE TYPE] PROPOSAL" (all caps). If there is an address, it goes on the line after the title.
+Important reminders:
+- Infer the right trade type from the work described and use it in the title
+- If notes have a PRICING section, use that exact price — don't make one up
+- If notes have a TIMELINE section, use that — don't invent one
+- If exclusions or open items are mentioned, include them honestly in PROJECT DETAILS
+- Do not add sections that aren't in the example
+- Title format: "[TRADE] PROPOSAL" (all caps). Address on the next line if provided.
+- The NEXT STEPS section must always be present. Keep it practical and brief.
 
-Please provide as JSON:
+Respond as JSON:
 {
-  "title": "TRADE TYPE PROPOSAL\\nAddress if provided",
-  "body": "the full proposal body starting from PROJECT SCOPE through the signature lines",
-  "emailSubject": "${mode === "proposal_email" ? "a short, professional subject line for the proposal email" : ""}",
-  "emailBody": "${mode === "proposal_email" ? "a brief, friendly email body — 3–4 sentences max, like a text from a local contractor. Include [PROPOSAL_LINK] as the placeholder for the proposal link. Sign off as the contractor." : ""}",
-  "projectType": "short label like Bathroom, Kitchen, Plumbing, HVAC, Painting, etc."
+  "title": "TRADE PROPOSAL\\nAddress if provided",
+  "body": "full proposal body from PROJECT SCOPE through the signature lines",
+  "emailSubject": "${mode === "proposal_email" ? "short, professional subject for the proposal email" : ""}",
+  "emailBody": "${mode === "proposal_email" ? "3–4 sentence friendly email, like a text from a contractor. Include [PROPOSAL_LINK] for the proposal link. Sign off naturally." : ""}",
+  "projectType": "short label — Plumbing, HVAC, Painting, Electrical, Flooring, Remodel, etc."
 }`;
 
   const response = await openai.chat.completions.create({
@@ -195,10 +159,11 @@ export async function refineProposal(
   originalData: Partial<Proposal>
 ): Promise<{ body: string }> {
   const openai = getOpenAIClient();
+
   const shortcutMap: Record<string, string> = {
-    shorter: "Make this proposal more concise. Remove unnecessary words but keep all facts and dollar amounts. Keep the exact same section structure.",
-    longer: "Add more detail to the scope items. Keep the same section structure and style — no fluff, just more specifics.",
-    regenerate: "Rewrite this proposal from scratch using the same facts and prices. Keep the exact same section structure. Fresh wording, same clean style.",
+    shorter: "Cut this down. Remove any filler sentences. Keep every fact, price, and bullet — just make it tighter.",
+    longer: "Add more specific detail to the scope bullets. Same structure and tone — no fluff added, just more specifics about the work.",
+    regenerate: "Rewrite this proposal fresh using the same facts, prices, and structure. Same clean contractor tone, new wording.",
   };
 
   const resolvedInstruction = shortcutMap[instruction] || instruction;
@@ -209,11 +174,11 @@ export async function refineProposal(
       {
         role: "system",
         content:
-          "You are a contractor proposal writer for a small home service business. Revise the proposal as instructed. Return ONLY the revised proposal body text — no JSON, no markdown fences, no extra commentary. Keep the section structure: PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, NEXT STEPS, ACCEPTANCE OF PROPOSAL. Keep it clean and direct — no fluff, no bracket placeholders.",
+          "You write contractor proposals. You are revising an existing proposal. Return ONLY the revised proposal body text — no JSON, no markdown fences, no extra commentary. Keep the same section order: PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, NEXT STEPS, ACCEPTANCE OF PROPOSAL. Keep the tone direct and contractor-like. No filler, no bracket placeholders.",
       },
       {
         role: "user",
-        content: `Instruction: ${resolvedInstruction}\n\nCurrent proposal:\n${currentText}\n\nReturn only the revised proposal body text.`,
+        content: `Instruction: ${resolvedInstruction}\n\nCurrent proposal:\n${currentText}\n\nReturn only the revised body text.`,
       },
     ],
   });
