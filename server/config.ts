@@ -22,7 +22,7 @@ const resolvedBaseUrl = directApiKey
 export const appConfig = {
   openaiApiKey: resolvedApiKey,
   openaiBaseUrl: resolvedBaseUrl,
-  openaiChatModel: firstNonEmpty(process.env.OPENAI_MODEL, "gpt-4o")!,
+  openaiChatModel: firstNonEmpty(process.env.OPENAI_MODEL, "gpt-4.5")!,
   openaiTranscriptionModel: firstNonEmpty(
     process.env.OPENAI_TRANSCRIPTION_MODEL,
     "whisper-1",

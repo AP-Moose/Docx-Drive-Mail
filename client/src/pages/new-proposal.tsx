@@ -463,7 +463,10 @@ export default function NewProposal() {
         setIsChatListening(false);
         setIsChatTranscribing(true);
         const transcript = await transcribeBlob(new Blob(chunks, { type: "audio/webm" }));
-        if (transcript) setChatInput(transcript);
+        if (transcript) {
+          setChatInput(transcript);
+          setShowTypedAiInput(true);
+        }
         setIsChatTranscribing(false);
       };
       chatRecorderRef.current = recorder;
