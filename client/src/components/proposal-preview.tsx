@@ -100,16 +100,16 @@ export default function ProposalPreview({
     >
       <style>{`
         .proposal-preview-container {
-          background: linear-gradient(180deg, #fffcf6 0%, #ffffff 14%);
-          color: #182118;
+          background: linear-gradient(180deg, #F5F7FF 0%, #ffffff 14%);
+          color: #0E1020;
           font-family: Georgia, "Times New Roman", serif;
           font-size: 15px;
           line-height: 1.75;
           padding: 28px 28px 32px;
-          border: 1px solid #e8ebe4;
+          border: 1px solid #D4D7E8;
           border-radius: 24px;
           overflow-y: auto;
-          box-shadow: 0 30px 70px -45px rgba(15, 23, 42, 0.35);
+          box-shadow: 0 30px 70px -45px rgba(99, 102, 255, 0.18);
         }
         @media (max-width: 420px) {
           .proposal-preview-container {
@@ -123,7 +123,7 @@ export default function ProposalPreview({
             padding-bottom: 12px;
           }
           .proposal-preview-logo {
-            max-width: 110px;
+            max-height: 52px;
           }
           .proposal-preview-title {
             font-size: 20px;
@@ -153,11 +153,11 @@ export default function ProposalPreview({
           gap: 20px;
           margin-bottom: 20px;
           padding-bottom: 18px;
-          border-bottom: 1px solid #e5eadf;
+          border-bottom: 1px solid #D4D7E8;
         }
         .proposal-preview-logo {
           display: block;
-          max-height: 48px;
+          max-height: 72px;
           width: auto;
         }
         .proposal-preview-meta {
@@ -166,19 +166,19 @@ export default function ProposalPreview({
           font-size: 11px;
           text-transform: uppercase;
           letter-spacing: 0.2em;
-          color: #647166;
+          color: #4A5080;
         }
         .proposal-preview-title {
           font-size: 25px;
           font-weight: 700;
-          color: #113f18;
+          color: #1a1c3a;
           text-align: center;
           margin-bottom: 8px;
           letter-spacing: -0.02em;
         }
         .proposal-preview-address {
           text-align: center;
-          color: #5e675d;
+          color: #4A5080;
           font-family: "Open Sans", "Segoe UI", sans-serif;
           font-size: 13px;
           line-height: 1.5;
@@ -188,25 +188,25 @@ export default function ProposalPreview({
           font-family: "Open Sans", "Segoe UI", sans-serif;
           font-size: 11px;
           font-weight: 700;
-          color: #166534;
+          color: #6366FF;
           text-transform: uppercase;
           letter-spacing: 0.24em;
           margin-top: 26px;
           margin-bottom: 10px;
           padding-bottom: 8px;
-          border-bottom: 1px solid #e8ebe4;
+          border-bottom: 1px solid #D4D7E8;
         }
         .proposal-subheading {
           font-family: "Open Sans", "Segoe UI", sans-serif;
           font-size: 13px;
           font-weight: 700;
-          color: #1f2937;
+          color: #1a1c3a;
           margin-top: 12px;
           margin-bottom: 6px;
         }
         .proposal-paragraph {
           margin-bottom: 10px;
-          color: #1f2937;
+          color: #1a1c3a;
         }
         .proposal-list {
           list-style: none;
@@ -217,32 +217,32 @@ export default function ProposalPreview({
           position: relative;
           padding-left: 20px;
           margin-bottom: 6px;
-          color: #1f2937;
+          color: #1a1c3a;
         }
         .proposal-bullet::before {
           content: "•";
           position: absolute;
           left: 3px;
-          color: #166534;
+          color: #6366FF;
           font-weight: bold;
         }
         .proposal-bullet-nested {
           padding-left: 34px;
           font-size: 14px;
-          color: #4b5563;
+          color: #4A5080;
         }
         .proposal-bullet-nested::before {
           left: 18px;
           content: "–";
-          color: #6b7280;
+          color: #A1A7C4;
           font-weight: normal;
         }
         .proposal-preview-customer {
           margin-top: 22px;
           padding-top: 16px;
-          border-top: 1px solid #e8ebe4;
+          border-top: 1px solid #D4D7E8;
           font-family: "Open Sans", "Segoe UI", sans-serif;
-          color: #4b5563;
+          color: #4A5080;
           font-size: 12px;
           line-height: 1.6;
         }

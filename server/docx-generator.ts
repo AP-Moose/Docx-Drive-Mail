@@ -95,7 +95,7 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
   docChildren.push(
     new Paragraph({
       children: [
-        new TextRun({ text: titleLines[0], bold: true, size: 32, font: "Calibri", color: "0F490E" }),
+        new TextRun({ text: titleLines[0], bold: true, size: 32, font: "Calibri", color: "1a1c3a" }),
       ],
       alignment: AlignmentType.CENTER,
       spacing: { after: titleLines.length > 1 ? 100 : 200 },
@@ -187,10 +187,10 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
           run: { font: "Calibri", size: 22, color: "1A1A1A" },
         },
         heading1: {
-          run: { font: "Calibri", size: 32, bold: true, color: "0F490E" },
+          run: { font: "Calibri", size: 32, bold: true, color: "1a1c3a" },
         },
         heading2: {
-          run: { font: "Calibri", size: 24, bold: true, color: "15A32A" },
+          run: { font: "Calibri", size: 24, bold: true, color: "6366FF" },
         },
       },
     },
