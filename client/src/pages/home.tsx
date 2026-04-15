@@ -18,7 +18,7 @@ export default function Home() {
       </div>
 
       <div className="flex-1 px-5 pb-4 pt-5">
-        <div className="space-y-4 rounded-[34px] bg-card p-4 shadow-[0_40px_90px_-50px_rgba(0,0,0,0.8)]">
+        <div className="space-y-4 rounded-[34px] bg-card p-4 shadow-[0_8px_40px_-8px_rgba(99,102,255,0.12),0_2px_8px_0_rgba(0,0,0,0.06)]">
           <button
             data-testid="button-new-proposal"
             onClick={() => navigate("/new?mode=proposal_email")}
