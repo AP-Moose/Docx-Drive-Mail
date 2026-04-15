@@ -29,8 +29,9 @@ import {
 } from "lucide-react";
 import type { Proposal } from "@shared/schema";
 import ProposalPreview from "@/components/proposal-preview";
+import { isGuidedPromptsEnabled } from "@/lib/app-settings";
 
-type Step = "info" | "guided" | "generating" | "review" | "confirm" | "saving" | "done";
+type Step = "info" | "guided" | "quick" | "generating" | "review" | "confirm" | "saving" | "done";
 
 // ─── Guided Prompts ─────────────────────────────────────────────────────────
 const GUIDED_PROMPTS = [
@@ -211,8 +212,8 @@ function parseApiError(error: unknown): { message: string; code?: string } {
 }
 
 // ─── UI Subcomponents ────────────────────────────────────────────────────────
-function ProgressBar({ step }: { step: Step }) {
-  const displaySteps = ["info", "guided", "review", "confirm", "done"];
+function ProgressBar({ step, guided }: { step: Step; guided: boolean }) {
+  const displaySteps = guided ? ["info", "guided", "review", "confirm", "done"] : ["info", "quick", "review", "confirm", "done"];
   let displayIndex = displaySteps.indexOf(step);
   if (step === "generating") displayIndex = 2;
   if (step === "saving") displayIndex = 3;
@@ -226,15 +227,17 @@ function ProgressBar({ step }: { step: Step }) {
   );
 }
 
-function StepLabel({ step, mode }: { step: Step; mode: string }) {
+function StepLabel({ step, mode, guided }: { step: Step; mode: string; guided: boolean }) {
+  const total = "5";
   const labels: Record<Step, string> = {
-    info: "Step 1 of 5  Customer details",
-    guided: "Step 2 of 5  Describe the work",
+    info: `Step 1 of ${total}  Customer details`,
+    guided: `Step 2 of ${total}  Describe the work`,
+    quick: `Step 2 of ${total}  Describe the work`,
     generating: "Writing a customer-ready proposal",
-    review: "Step 3 of 5  Review the proposal",
-    confirm: mode === "proposal_email" ? "Step 4 of 5  Final send check" : "Step 4 of 5  Final save check",
+    review: `Step 3 of ${total}  Review the proposal`,
+    confirm: mode === "proposal_email" ? `Step 4 of ${total}  Final send check` : `Step 4 of ${total}  Final save check`,
     saving: mode === "proposal_email" ? "Sending your proposal package" : "Saving your proposal package",
-    done: "Step 5 of 5  Completed",
+    done: `Step 5 of ${total}  Completed`,
   };
   return <p className="mt-3 text-sm text-primary-foreground/80">{labels[step]}</p>;
 }
@@ -350,6 +353,14 @@ export default function NewProposal() {
     mode: initialMode,
   });
 
+  // Read the guided-prompts setting (live from localStorage)
+  const [guidedMode, setGuidedMode] = useState(() => isGuidedPromptsEnabled());
+  // Quick-record state (single-shot mode)
+  const [quickTranscript, setQuickTranscript] = useState("");
+  const [isQuickListening, setIsQuickListening] = useState(false);
+  const [isQuickTranscribing, setIsQuickTranscribing] = useState(false);
+  const quickRecorderRef = useRef<MediaRecorder | null>(null);
+
   const { data: draftProposal } = useQuery<Proposal>({
     queryKey: ["/api/proposals", draftId],
     enabled: Boolean(draftId),
@@ -393,7 +404,8 @@ export default function NewProposal() {
       } else {
         setStep("info");
       }
-    } else if (step === "review") setStep("guided");
+    } else if (step === "quick") setStep("info");
+    else if (step === "review") setStep(guidedMode ? "guided" : "quick");
     else if (step === "confirm") setStep("review");
   }
 
@@ -452,6 +464,55 @@ export default function NewProposal() {
         variant: "destructive",
       });
     }
+  }
+
+  // ─── Quick (one-shot) voice recording ──────────────────────────────────────
+  async function toggleQuickVoice() {
+    if (isQuickListening) {
+      quickRecorderRef.current?.stop();
+      setIsQuickListening(false);
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        setIsQuickListening(false);
+        setIsQuickTranscribing(true);
+        const transcript = await transcribeBlob(new Blob(chunks, { type: "audio/webm" }));
+        if (transcript) {
+          setQuickTranscript((current) => current ? `${current.trim()} ${transcript}` : transcript);
+        }
+        setIsQuickTranscribing(false);
+      };
+      quickRecorderRef.current = recorder;
+      recorder.start();
+      setIsQuickListening(true);
+    } catch {
+      toast({
+        title: "Microphone access denied",
+        description: "Allow microphone access to record.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  function triggerQuickGenerate() {
+    const hasContent = quickTranscript.trim();
+    if (!hasContent) {
+      toast({
+        title: "Describe the job first",
+        description: "Record or type the scope before generating.",
+        variant: "destructive",
+      });
+      return;
+    }
+    createMutation.mutate(quickTranscript);
   }
 
   // ─── Chat/refine voice recording ──────────────────────────────────────────
@@ -657,7 +718,7 @@ export default function NewProposal() {
           setEmailInput("");
         }
       }
-      setStep("guided");
+      setStep(guidedMode ? "guided" : "quick");
       setGuidedStepIndex(0);
       return;
     }
@@ -724,11 +785,11 @@ export default function NewProposal() {
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f7f8f6_0%,#ffffff_22%,#ffffff_100%)]">
-      <div className={`mx-auto flex min-h-screen flex-col ${step === "guided" ? "max-w-5xl" : "max-w-2xl"}`}>
+      <div className="mx-auto flex min-h-screen flex-col max-w-2xl">
         {/* ─── Header ─────────────────────────────────────────────── */}
         <div className="bg-primary px-5 pb-6 pt-10 text-primary-foreground">
           <div className="mb-4 flex items-center gap-3">
-            {(step === "info" || step === "guided" || step === "review" || step === "confirm") && (
+            {(step === "info" || step === "guided" || step === "quick" || step === "review" || step === "confirm") && (
               <button
                 onClick={goBack}
                 className="rounded-full p-1 text-primary-foreground/80 transition-colors hover:text-primary-foreground"
@@ -743,8 +804,8 @@ export default function NewProposal() {
               </span>
             </div>
           </div>
-          <ProgressBar step={step} />
-          <StepLabel step={step} mode={form.mode} />
+          <ProgressBar step={step} guided={guidedMode} />
+          <StepLabel step={step} mode={form.mode} guided={guidedMode} />
         </div>
 
         {/* ─── Main content ────────────────────────────────────────── */}
@@ -878,10 +939,10 @@ export default function NewProposal() {
                 </div>
               </div>
 
-              {/* Two-column layout */}
-              <div className="flex flex-col lg:flex-row gap-5 items-start">
-                {/* Left: Prompt + recorder */}
-                <div className="w-full lg:w-[420px] flex-shrink-0 space-y-3">
+              {/* Two-column layout — stacks on mobile, preview in collapsible */}
+              <div className="flex flex-col gap-5 items-start">
+                {/* Prompt + recorder (full width on all screens) */}
+                <div className="w-full space-y-3">
                   {/* Prompt card */}
                   <div className="rounded-[28px] border border-border/80 bg-card px-5 py-6 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.25)] space-y-5">
                     <div className="space-y-2">
@@ -900,57 +961,6 @@ export default function NewProposal() {
                       </h2>
                       <p className="text-sm text-muted-foreground">{currentPrompt.hint}</p>
                     </div>
-
-                    {/* Voice button */}
-                    <button
-                      type="button"
-                      data-testid="button-guided-voice"
-                      onClick={toggleGuidedVoice}
-                      disabled={isGuidedTranscribing}
-                      className={`w-full rounded-[22px] border px-5 py-5 text-left transition-all active:scale-[0.99] ${
-                        isGuidedListening
-                          ? "border-amber-300 bg-amber-50 text-amber-900 shadow-[0_12px_30px_-15px_rgba(251,191,36,0.3)]"
-                          : isGuidedTranscribing
-                          ? "border-primary/30 bg-primary/8 text-primary"
-                          : "border-primary/20 bg-[linear-gradient(180deg,rgba(22,163,74,0.08),rgba(255,255,255,0.96))] text-foreground shadow-[0_12px_30px_-18px_rgba(22,163,74,0.3)]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div
-                          className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full ${
-                            isGuidedListening
-                              ? "bg-amber-200 animate-pulse"
-                              : isGuidedTranscribing
-                              ? "bg-primary/15"
-                              : "bg-primary/10"
-                          }`}
-                        >
-                          {isGuidedTranscribing ? (
-                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                          ) : isGuidedListening ? (
-                            <MicOff className="h-6 w-6 text-amber-700" />
-                          ) : (
-                            <Mic className="h-6 w-6 text-primary" />
-                          )}
-                        </div>
-                        <div className="space-y-0.5">
-                          <p className="font-semibold text-[15px]">
-                            {isGuidedTranscribing
-                              ? "Transcribing…"
-                              : isGuidedListening
-                              ? "Tap to stop"
-                              : currentTranscript
-                              ? "Tap to record more"
-                              : "Tap to speak"}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {isGuidedListening
-                              ? "Listening — speak naturally"
-                              : "Or type below"}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
 
                     {/* Transcript / text area */}
                     <Textarea
@@ -1040,16 +1050,17 @@ export default function NewProposal() {
                   </div>
                 </div>
 
-                {/* Right: Live draft preview */}
-                <div className="w-full flex-1 min-w-0">
-                  {hasDraftContent ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 px-1">
-                        <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
-                          Proposal preview — updates as you talk
-                        </p>
-                      </div>
+                {/* Live draft preview — collapsible on mobile */}
+                {hasDraftContent && (
+                  <details className="w-full group" open>
+                    <summary className="flex items-center gap-2 cursor-pointer px-1 list-none">
+                      <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                      <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+                        Proposal preview — updates as you talk
+                      </p>
+                      <svg className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </summary>
+                    <div className="mt-2">
                       <ProposalPreview
                         title={draftTitle}
                         text={draftText}
@@ -1058,20 +1069,72 @@ export default function NewProposal() {
                         jobAddress={form.jobAddress || undefined}
                       />
                     </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-border/50 bg-muted/15 px-6 py-12 text-center">
-                      <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/8">
-                        <Mic className="h-5 w-5 text-primary/50" />
-                      </div>
-                      <p className="text-sm font-semibold text-muted-foreground">
-                        Proposal preview appears here
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground/60">
-                        Tap the mic and start talking — it updates live
-                      </p>
+                  </details>
+                )}
+                {!hasDraftContent && (
+                  <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-border/50 bg-muted/15 px-6 py-12 text-center w-full">
+                    <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/8">
+                      <Mic className="h-5 w-5 text-primary/50" />
                     </div>
+                    <p className="text-sm font-semibold text-muted-foreground">
+                      Proposal preview appears here
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground/60">
+                      Tap the mic and start talking — it updates live
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* QUICK (one-shot) STEP */}
+          {step === "quick" && (
+            <div className="space-y-4">
+              {/* Customer info bar */}
+              <div className="flex items-center gap-3 rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold truncate">{form.customerName}</p>
+                  {form.jobAddress && (
+                    <p className="text-sm text-muted-foreground truncate">{form.jobAddress}</p>
                   )}
                 </div>
+                <span className="text-xs font-medium text-muted-foreground">
+                  Quick mode
+                </span>
+              </div>
+
+              <div className="rounded-[28px] border border-border/80 bg-card px-5 py-6 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.25)] space-y-5">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+                    Describe the job
+                  </p>
+                  <h2 className="text-[22px] font-semibold tracking-tight leading-snug">
+                    Say it in your own words
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Hit record, describe the whole job, then hit generate. One take.
+                  </p>
+                </div>
+
+                {/* Transcript / text area */}
+                <Textarea
+                  data-testid="textarea-quick-scope"
+                  className="min-h-[120px] rounded-[20px] border-border/80 bg-background text-base leading-7 resize-none"
+                  placeholder="e.g. Kitchen faucet replacement for John at 123 Main St. Remove old faucet, install new Delta pull-down. $650 flat, can start Thursday."
+                  value={quickTranscript}
+                  onChange={(e) => setQuickTranscript(e.target.value)}
+                />
+
+                {quickTranscript && (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setQuickTranscript("")}
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1324,8 +1387,8 @@ export default function NewProposal() {
         </div>
 
         {/* ─── Sticky footer ───────────────────────────────────────── */}
-        {(step === "info" || step === "guided" || step === "review" || step === "confirm") && (
-          <div className={`sticky bottom-0 border-t bg-background/95 px-5 py-4 backdrop-blur ${step === "guided" ? "max-w-5xl" : ""}`}>
+        {(step === "info" || step === "guided" || step === "quick" || step === "review" || step === "confirm") && (
+          <div className="sticky bottom-0 border-t bg-background/95 px-5 py-4 backdrop-blur">
             {/* Review step: AI chat bar */}
             {step === "review" && (
               <div className="mb-3 space-y-2 rounded-[20px] border border-border/70 bg-background/98 px-3 py-2.5 shadow-[0_10px_24px_-20px_rgba(17,24,39,0.22)]">
@@ -1417,30 +1480,133 @@ export default function NewProposal() {
               </div>
             )}
 
-            {/* Guided step: Generate button in footer */}
+            {/* Guided step: Voice + Generate in footer */}
             {step === "guided" && (
-              <Button
-                data-testid="button-generate-proposal"
-                className="mb-3 h-12 w-full rounded-2xl text-base font-semibold"
-                onClick={triggerGenerate}
-                disabled={isLoading || !Object.values(stepTranscripts).some((v) => v.trim())}
-                variant="default"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Building proposal…
-                  </>
-                ) : (
-                  <>
-                    <Zap className="mr-2 h-5 w-5" />
-                    Generate Proposal
-                  </>
-                )}
-              </Button>
+              <>
+                <div className="mb-3 space-y-2 rounded-[20px] border border-border/70 bg-background/98 px-3 py-2.5 shadow-[0_10px_24px_-20px_rgba(17,24,39,0.22)]">
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/65">{currentPrompt.question}</p>
+                    {(isGuidedListening || isGuidedTranscribing) && (
+                      <p className="text-xs text-muted-foreground">
+                        {isGuidedListening ? "Listening…" : isGuidedTranscribing ? "Transcribing…" : ""}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    data-testid="button-guided-voice-footer"
+                    variant="secondary"
+                    className={`h-13 w-auto min-w-[220px] rounded-2xl px-5 text-[15px] font-semibold ${
+                      isGuidedListening
+                        ? "border border-amber-300 bg-amber-50 text-amber-900 animate-pulse"
+                        : "border border-primary/15 bg-primary/8 text-primary"
+                    }`}
+                    onClick={toggleGuidedVoice}
+                    disabled={isGuidedTranscribing}
+                  >
+                    {isGuidedTranscribing ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Transcribing…
+                      </>
+                    ) : isGuidedListening ? (
+                      <>
+                        <MicOff className="mr-2 h-5 w-5" />
+                        Tap to stop recording
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="mr-2 h-5 w-5" />
+                        Tap to start recording
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <Button
+                  data-testid="button-generate-proposal"
+                  className="h-12 w-full rounded-2xl text-base font-semibold"
+                  onClick={triggerGenerate}
+                  disabled={isLoading || !Object.values(stepTranscripts).some((v) => v.trim())}
+                  variant="default"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Building proposal…
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="mr-2 h-5 w-5" />
+                      Generate Proposal
+                    </>
+                  )}
+                </Button>
+              </>
             )}
 
-            {step !== "guided" && (
+            {/* Quick step: Voice + Generate in footer */}
+            {step === "quick" && (
+              <>
+                <div className="mb-3 space-y-2 rounded-[20px] border border-border/70 bg-background/98 px-3 py-2.5 shadow-[0_10px_24px_-20px_rgba(17,24,39,0.22)]">
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/65">Describe the work</p>
+                    {(isQuickListening || isQuickTranscribing) && (
+                      <p className="text-xs text-muted-foreground">
+                        {isQuickListening ? "Listening…" : isQuickTranscribing ? "Transcribing…" : ""}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    data-testid="button-quick-voice-footer"
+                    variant="secondary"
+                    className={`h-13 w-auto min-w-[220px] rounded-2xl px-5 text-[15px] font-semibold ${
+                      isQuickListening
+                        ? "border border-amber-300 bg-amber-50 text-amber-900 animate-pulse"
+                        : "border border-primary/15 bg-primary/8 text-primary"
+                    }`}
+                    onClick={toggleQuickVoice}
+                    disabled={isQuickTranscribing}
+                  >
+                    {isQuickTranscribing ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Transcribing…
+                      </>
+                    ) : isQuickListening ? (
+                      <>
+                        <MicOff className="mr-2 h-5 w-5" />
+                        Tap to stop recording
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="mr-2 h-5 w-5" />
+                        Tap to start recording
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <Button
+                  data-testid="button-quick-generate"
+                  className="h-12 w-full rounded-2xl text-base font-semibold"
+                  onClick={triggerQuickGenerate}
+                  disabled={isLoading || !quickTranscript.trim()}
+                  variant="default"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Building proposal…
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="mr-2 h-5 w-5" />
+                      Generate Proposal
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+
+            {step !== "guided" && step !== "quick" && (
               <Button
                 data-testid="button-next"
                 className="h-14 w-full rounded-2xl text-base font-semibold"

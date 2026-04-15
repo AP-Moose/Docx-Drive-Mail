@@ -1,6 +1,6 @@
 import { useLocation, useSearch } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   HardHat,
@@ -15,10 +15,13 @@ import {
   Cable,
   Link,
   LogOut,
+  ListChecks,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { isGuidedPromptsEnabled, setGuidedPromptsEnabled } from "@/lib/app-settings";
 
 interface ConnectionStatus {
   drive: { connected: boolean; email?: string };
@@ -89,6 +92,7 @@ export default function Settings() {
   const search = useSearch();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [guidedPrompts, setGuidedPromptsLocal] = useState(() => isGuidedPromptsEnabled());
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -302,6 +306,59 @@ export default function Settings() {
             </div>
           )}
         </div>
+
+        {!isLoading && (
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Proposal Flow</h2>
+            <div className="space-y-3">
+              {/* Guided prompts toggle */}
+              <div className="bg-card border border-card-border rounded-xl p-4 flex items-start gap-4">
+                <div className="rounded-full p-2.5 bg-primary/10">
+                  {guidedPrompts ? (
+                    <ListChecks className="w-5 h-5 text-primary" />
+                  ) : (
+                    <MessageSquare className="w-5 h-5 text-primary" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-medium">Guided prompts</p>
+                    <button
+                      role="switch"
+                      aria-checked={guidedPrompts}
+                      data-testid="toggle-guided-prompts"
+                      onClick={() => {
+                        const next = !guidedPrompts;
+                        setGuidedPromptsEnabled(next);
+                        setGuidedPromptsLocal(next);
+                        toast({
+                          title: next ? "Guided prompts on" : "Quick mode on",
+                          description: next
+                            ? "You'll see 5 step-by-step prompts when creating a proposal."
+                            : "One record button, then generate — faster for demos.",
+                        });
+                      }}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        guidedPrompts ? "bg-primary" : "bg-muted"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 rounded-full bg-white transition-transform shadow-sm ${
+                          guidedPrompts ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {guidedPrompts
+                      ? "5 step-by-step voice prompts (customer request, work, exclusions, pricing, timeline)."
+                      : "One-shot: record everything in one take, then generate. Great for demos."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {!isLoading && runtime && (
           <div>
