@@ -26,56 +26,86 @@ export async function generateProposal(
   mode: string
 ): Promise<GeneratedProposal> {
   const openai = getOpenAIClient();
-  const systemPrompt = `You are a professional contractor proposal writer for Inspiring Services, a home improvement company.
-You write clean, direct proposals that are easy for homeowners to read. No fluff, no filler, no corporate jargon.
-The contractor often dictates scope notes by voice, so the input may have typos, run-on sentences, and rough grammar — extract the facts and write professionally.
-NEVER use bracket placeholders like [TBD], [TBD - xyz], [Client Name], etc. in the proposal body. If information is not provided, simply omit it. If something is to be decided by the homeowner, say it naturally (e.g. "Color to be selected by homeowner").
-The ONLY allowed bracket placeholder is [PROPOSAL_LINK] in the emailBody field — this is required and will be replaced with the actual link.`;
 
-  const userPrompt = `Write a contractor proposal with these details:
+  const systemPrompt = `You write contractor proposals for small local home service businesses — plumbers, electricians, painters, HVAC techs, handymen, remodelers.
 
-Customer: ${customerName}
-${jobAddress ? `Job Address: ${jobAddress}` : ""}
+Your proposals sound like a trustworthy local contractor wrote them, not like a corporate marketing team.
 
-Scope Notes from Contractor (may be rough voice dictation):
+Tone rules:
+- Write the way a contractor talks: direct, clear, honest
+- No filler phrases: no "we are pleased to", no "comprehensive solution", no "industry-leading", no "best practices"
+- No throat-clearing at the start of sections
+- Short sentences. Bullets instead of paragraphs.
+- Use "we" or "I" naturally — it's one contractor writing to one homeowner
+- If something is uncertain, say so plainly. Don't paper over it.
+- Use specific numbers and details from the notes. Don't generalize.
+
+Formatting rules:
+- PROJECT SCOPE: one bullet per task. Verb-first. Specific. ("Remove old water heater", not "Water heater removal services")
+- TOTAL INVESTMENT: price on its own line. One plain sentence about what's included. Nothing more.
+- DEPOSIT SCHEDULE: standard thirds. Calculate the dollar amounts. Bullet list.
+- PROJECT DETAILS: short bullets. Timeline, exclusions, open items. Honest.
+- NEXT STEPS: 2 sentences max. What happens if they say yes. Practical. Not salesy.
+- ACCEPTANCE OF PROPOSAL: three lines exactly as shown in the example.
+
+Never use [TBD], [INSERT], or any bracket placeholders in the proposal body.
+The only allowed bracket is [PROPOSAL_LINK] in the emailBody field.`;
+
+  const isStructured =
+    scopeNotes.includes("CUSTOMER REQUEST:") ||
+    scopeNotes.includes("INCLUDED WORK:") ||
+    scopeNotes.includes("PRICING:");
+
+  const structuredNote = isStructured
+    ? "The notes are organized by topic — use each section for the matching part of the proposal."
+    : "The notes may be rough voice dictation — extract the facts and write cleanly.";
+
+  const userPrompt = `Write a contractor proposal.
+
+Customer: ${customerName}${jobAddress ? `\nJob Address: ${jobAddress}` : ""}
+
+Contractor's notes (${structuredNote}):
 ${scopeNotes}
 
-Generate a clean, professional proposal using this EXACT structure. Match the style of this example output:
+Use this exact structure and match this quality and style:
 
 ---
-BATHROOM RENOVATION PROPOSAL
+WATER HEATER REPLACEMENT PROPOSAL
 
-5200 Hilltop Dr, Brookhaven
+1847 Oak Glen Rd, Plainfield
 
 PROJECT SCOPE
 
-- Full demolition of existing bathroom
-- Removal of all mold-affected drywall and materials
-- Treatment and sanitizing of impacted framing areas
-- Proper debris disposal
+- Drain and remove existing 40-gal gas water heater
+- Haul away old unit
+- Install new 40-gal Bradford White gas water heater
+- Reconnect gas line, water supply, and pressure relief valve
+- Test for leaks and verify proper operation
 
 TOTAL INVESTMENT
 
-$9,895 (Flat Rate)
+$1,450 (Flat Rate)
 
-This price includes all labor, standard installation materials, mold remediation treatment, debris removal, and full project management.
+Includes all labor, fittings, and standard installation materials. Unit cost is separate if customer is supplying.
 
 DEPOSIT SCHEDULE
 
-- One-third ($3,298) due upon contract signing
-- One-third ($3,298) due on the first day of on-site work
-- Final one-third ($3,299) due upon project completion
+- $483 due upon signing
+- $483 due when we start
+- $484 due when the job is done
 
 PROJECT DETAILS
 
-- Estimated timeline: 5–7 working days
-- Final material selections to be confirmed prior to ordering
-- Permit fees (if required) not included
-- Any major structural repairs discovered during demolition will be discussed prior to proceeding
+- Estimated time: 3–4 hours
+- Permit may be required — we'll confirm before starting
+- If the gas shutoff valve or supply lines are corroded, replacing them is extra
+- Customer is responsible for selecting the unit if not supplied by contractor
+
+NEXT STEPS
+
+If this looks right, let us know and we'll get you on the schedule. We'll need the deposit before we order materials.
 
 ACCEPTANCE OF PROPOSAL
-
-By signing below, you agree to the scope of work and payment terms outlined above.
 
 Client Name (Printed): __________________________________________
 
@@ -84,27 +114,22 @@ Client Signature: ________________________________________________
 Date: _______________________
 ---
 
-Rules:
-- PROJECT SCOPE: One bullet per work item. Be specific. No sub-bullets or explanations.
-- TOTAL INVESTMENT: State the price. One sentence about what it includes.
-- DEPOSIT SCHEDULE: Split into thirds with calculated dollar amounts. Use bullet points.
-- PROJECT DETAILS: Brief bullet points only. Timeline, material notes, exclusions.
-- ACCEPTANCE OF PROPOSAL: Exactly as shown above — signing line, signature line, date line.
-- If the contractor mentions multiple separate estimates/prices for different areas, list them all clearly in TOTAL INVESTMENT with a combined total.
-- Do NOT add sections that aren't in the example. Do NOT add warranty info, terms and conditions, company descriptions, or any other extra sections.
-- Do NOT use any bracket placeholders like [TBD] anywhere.
-- Keep every line short and direct. No paragraphs in the scope section.
+Important reminders:
+- Infer the right trade type from the work described and use it in the title
+- If notes have a PRICING section, use that exact price — don't make one up
+- If notes have a TIMELINE section, use that — don't invent one
+- If exclusions or open items are mentioned, include them honestly in PROJECT DETAILS
+- Do not add sections that aren't in the example
+- Title format: "[TRADE] PROPOSAL" (all caps). Address on the next line if provided.
+- The NEXT STEPS section must always be present. Keep it practical and brief.
 
-Title format: "[PROJECT TYPE] PROPOSAL" (all caps, e.g. "KITCHEN RENOVATION PROPOSAL")
-If there's an address, put it on a second line of the title.
-
-Please provide as JSON:
+Respond as JSON:
 {
-  "title": "PROJECT TYPE PROPOSAL\\nAddress if provided",
-  "body": "the full proposal body starting from PROJECT SCOPE through the signature lines",
-  "emailSubject": "${mode === "proposal_email" ? "a short professional email subject" : ""}",
-  "emailBody": "${mode === "proposal_email" ? "a brief, friendly email body — keep it short and casual like a text from a contractor. Use [PROPOSAL_LINK] as placeholder for the link. Sign off as the contractor." : ""}",
-  "projectType": "short label like Bathroom, Kitchen, Flooring, etc."
+  "title": "TRADE PROPOSAL\\nAddress if provided",
+  "body": "full proposal body from PROJECT SCOPE through the signature lines",
+  "emailSubject": "${mode === "proposal_email" ? "short, professional subject for the proposal email" : ""}",
+  "emailBody": "${mode === "proposal_email" ? "3–4 sentence friendly email, like a text from a contractor. Include [PROPOSAL_LINK] for the proposal link. Sign off naturally." : ""}",
+  "projectType": "short label — Plumbing, HVAC, Painting, Electrical, Flooring, Remodel, etc."
 }`;
 
   const response = await openai.chat.completions.create({
@@ -134,10 +159,11 @@ export async function refineProposal(
   originalData: Partial<Proposal>
 ): Promise<{ body: string }> {
   const openai = getOpenAIClient();
+
   const shortcutMap: Record<string, string> = {
-    shorter: "Make this proposal more concise. Remove unnecessary words but keep all facts and dollar amounts. Keep the exact same section structure.",
-    longer: "Add more detail to the scope items. Keep the same section structure and style — no fluff, just more specifics.",
-    regenerate: "Rewrite this proposal from scratch using the same facts and prices. Keep the exact same section structure. Fresh wording, same clean style.",
+    shorter: "Cut this down. Remove any filler sentences. Keep every fact, price, and bullet — just make it tighter.",
+    longer: "Add more specific detail to the scope bullets. Same structure and tone — no fluff added, just more specifics about the work.",
+    regenerate: "Rewrite this proposal fresh using the same facts, prices, and structure. Same clean contractor tone, new wording.",
   };
 
   const resolvedInstruction = shortcutMap[instruction] || instruction;
@@ -148,11 +174,11 @@ export async function refineProposal(
       {
         role: "system",
         content:
-          "You are a professional contractor proposal writer for Inspiring Services. Revise the proposal as instructed. Return ONLY the revised proposal body text — no JSON, no markdown fences, no extra commentary. Keep the section structure: PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, ACCEPTANCE OF PROPOSAL. Keep it clean and direct — no fluff, no bracket placeholders. Never use [TBD] or any bracket notation.",
+          "You write contractor proposals. You are revising an existing proposal. Return ONLY the revised proposal body text — no JSON, no markdown fences, no extra commentary. Keep the same section order: PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, NEXT STEPS, ACCEPTANCE OF PROPOSAL. Keep the tone direct and contractor-like. No filler, no bracket placeholders.",
       },
       {
         role: "user",
-        content: `Instruction: ${resolvedInstruction}\n\nCurrent proposal:\n${currentText}\n\nReturn only the revised proposal body text.`,
+        content: `Instruction: ${resolvedInstruction}\n\nCurrent proposal:\n${currentText}\n\nReturn only the revised body text.`,
       },
     ],
   });

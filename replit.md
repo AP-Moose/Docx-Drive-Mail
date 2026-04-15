@@ -14,34 +14,48 @@ Mobile-first web app for contractors to create professional proposals, upload to
 
 ## Pipeline
 
-1. Fill form (only 3 fields: name, email, address)
-2. Describe the work (voice-first or type — AI infers project type, pricing, timeline)
-3. Review & edit with chat-based AI refinement + pretty preview toggle
-4. Confirm step — review formatted proposal preview + editable email subject/body before sending
-5. Finalize: generate .docx → upload to Drive (folder hierarchy) → set public link → send Gmail
+1. Fill customer info (name, email, address)
+2. Guided prompts (5 steps, voice or type): customer request → scope → exclusions → pricing → timeline
+3. scopeNotes serialized as labeled sections → sent to OpenAI → generates polished proposal with NEXT STEPS section
+4. Review & edit: AI preview, raw text editor, voice/text refinement
+5. Confirm: final proposal preview + editable email before send
+6. Finalize: generate .docx → upload to Drive → set public link → send Gmail
 
 ## Key Files
 
-- `shared/schema.ts` — Drizzle schema, types, insert schemas
-- `server/routes.ts` — API routes (CRUD, generate, refine, finalize, docx, drive-upload, send-email)
-- `server/ai.ts` — OpenAI proposal generation (infers project type; outputs structured format: PROJECT SCOPE, TOTAL INVESTMENT, DEPOSIT SCHEDULE, PROJECT DETAILS, ACCEPTANCE OF PROPOSAL)
+- `shared/schema.ts` — Drizzle schema, types, insert schemas (gmailMessageId column)
+- `server/config.ts` — Centralized config: AI_INTEGRATIONS_OPENAI_API_KEY > OPENAI_API_KEY priority
+- `server/google-auth.ts` — getGoogleProviderMode() → "replit" | "oauth" | "none"
+- `server/routes.ts` — API routes: CRUD, generate, refine, finalize, docx, drive-upload, send-email, settings/runtime
+- `server/ai.ts` — OpenAI proposal generation (infers project type; structured format)
 - `server/docx-generator.ts` — .docx generation via `docx` package (includes Inspiring Services logo at top)
-- `server/google-drive.ts` — Drive upload with folder hierarchy + public permission
-- `server/google-mail.ts` — Gmail send via `users.messages.send` (gmail.send scope, supports multiple To: recipients)
+- `server/google-drive.ts` — Drive upload with folder hierarchy + public permission (Replit Connectors)
+- `server/google-mail.ts` — sendGmailMessage() via googleapis + Replit Connectors (gmail.send scope)
 - `server/storage.ts` — IStorage interface + DatabaseStorage implementation
 - `client/src/components/proposal-preview.tsx` — Rich formatted proposal preview (matches Drive/docx styling)
 - `client/src/pages/new-proposal.tsx` — 5-step wizard (info → scope → review → confirm → done)
-- `client/src/pages/home.tsx` — Home page (one primary Create button)
-- `client/src/pages/recent-proposals.tsx` — Recent proposals list
-- `client/src/pages/proposal-detail.tsx` — Single proposal detail view with formatted preview
+- `client/src/pages/home.tsx` — Home page (gradient hero, one primary Create button)
+- `client/src/pages/recent-proposals.tsx` — Recent proposals list with duplicate + dropdown
+- `client/src/pages/proposal-detail.tsx` — Single proposal detail with formatted preview and AI refinement
+- `client/src/pages/settings.tsx` — Connection status for Drive, Gmail + runtime status for OpenAI, DB, Google provider
 
-## UI Flow (5 steps)
+## UI Flow (5 steps — Guided Voice Builder)
 
-1. **Info** — customer name, multiple emails (chip input), job address (only 3 fields)
-2. **Scope** — voice-first input (large mic button) or type; AI infers project type, pricing, timeline from notes
-3. **Review & Edit** — toggle between raw text edit and pretty preview, chat-based refinement (type or voice), quick buttons
-4. **Confirm** — formatted proposal preview, editable email subject/body, recipient list, explicit send
-5. **Done** — explicit success checklist plus links to Drive doc, Gmail Sent, copy link, and download .docx
+1. **Info** — customer name, multiple emails (chip input), job address
+2. **Guided** — 5 prompts one at a time (What does the customer want? / What's included? / Exclusions? / Price? / Timeline?). Per-step voice recording (Whisper) + text editing. Live draft preview updates in real time from the transcripts.
+3. **Review & Edit** — formatted AI proposal preview, raw text editor, chat-based AI refinement (voice or type), quick shortcut buttons (shorter/longer/regenerate)
+4. **Confirm** — formatted proposal preview, editable email subject/body, recipient list, explicit send check
+5. **Done** — links to Drive doc, Gmail Sent, copy link, download .docx
+
+## Guided Step Detail
+
+- 5 prompts: `customerRequest`, `includedWork`, `exclusions`, `pricing`, `timeline`
+- Each prompt has voice recording + text area (can do both)
+- Step navigation: Back / Skip (optional prompts) / Next within the card
+- Footer: Always-visible "Generate Proposal" CTA (enabled once any content is present)
+- Live preview: `buildDraftText()` + `buildDraftTitle()` client-side rendering from step transcripts
+- On generate: `buildScopeNotes()` serializes all transcripts into labeled sections sent to AI
+- Trade type is auto-inferred from transcript content (plumbing/HVAC/painting/electrical/etc.)
 
 ## Settings Page
 

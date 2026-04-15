@@ -1,0 +1,386 @@
+You are working on my EXISTING live app and current codebase, not rebuilding from scratch.
+
+Context:
+- This is my existing Docx-Drive-Mail app.
+- It is already deployed on a live domain.
+- The app already has core plumbing for proposal generation, DOCX generation, Gmail/mail flow, and Google Drive flow.
+- Recent work has already touched intake, proposal generation, and DOCX/output alignment.
+- The main problem is NOT hosting.
+- The main problem is that the current output is not good enough, and the product must become easier and more compelling for small, local, low-tech contractors.
+
+Very important product direction:
+I do NOT want to make this more complex for the user.
+I want it to feel easier.
+
+The desired experience is:
+- contractor taps record
+- contractor talks naturally, almost conversationally
+- while they talk, the proposal preview updates live on screen
+- the experience feels like a guided conversation
+- but under the hood it stays simple, stable, and fast
+
+Do NOT build a giant AI voice assistant.
+Do NOT add enterprise complexity.
+Do NOT rebuild the app.
+Do NOT break live deployment.
+Do NOT break Gmail, Google Drive, or the existing overall flow.
+
+Primary goal:
+Transform the current app into a SIMPLE GUIDED LIVE-UPDATE PROPOSAL BUILDER for very small contractors.
+
+Target user:
+- solo contractor
+- 1–5 person home service business
+- handyman
+- plumber
+- painter
+- electrician
+- HVAC installer
+- small remodeler
+- local “Home Depot parking lot” type contractor
+- low-tech, busy, wants speed and something that looks trustworthy
+
+Core UX principle:
+It should FEEL magical but actually be simple.
+
+Meaning:
+- talking feels natural
+- proposal updates live
+- user can see progress immediately
+- user does not need to fill out a giant form
+- user does not need to manage many screens
+- user does not need to understand AI
+
+What to build now:
+Build a V1 guided voice form with live-updating proposal preview.
+
+Do NOT build full autonomous AI conversation.
+Do NOT build full trade-specific workflow trees.
+Do NOT build scheduling / CRM / payment platform / signatures / enterprise project management.
+
+====================
+PRODUCT / UX CHANGES
+====================
+
+Build or refactor the main intake screen so it works like this:
+
+1. Simple top section:
+- customer name
+- customer email
+- optional project address
+- optional contractor/company info if not already set globally
+
+2. Guided voice capture section:
+The app should guide the user through a small number of prompts, one at a time.
+
+Use 5 guided prompts max:
+
+Prompt 1:
+“What does the customer want done?”
+
+Prompt 2:
+“What work is included?”
+
+Prompt 3:
+“Anything excluded, uncertain, or still to be decided?”
+
+Prompt 4:
+“What is the price or price range?”
+
+Prompt 5:
+“When can you start and how long should it take?”
+
+The contractor should be able to:
+- tap mic and speak naturally
+- see the transcript live for the current step
+- move next / back if needed
+- optionally skip a step
+- optionally edit text manually
+
+3. Live proposal preview panel:
+On the same screen, show a proposal preview that updates as the contractor speaks or edits.
+
+The live preview should update these sections:
+- Project Title
+- Customer / Job Summary
+- Work Included
+- Not Included / Assumptions
+- Price
+- Timeline
+- Next Steps
+
+This should not wait until the very end.
+The preview should evolve live as the user goes.
+
+4. Final review actions:
+At the bottom:
+- Save / Generate Final Proposal
+- Generate DOCX
+- Email Draft / Send flow using existing wiring
+- Edit sections manually before finalizing
+
+====================
+ARCHITECTURE / IMPLEMENTATION
+====================
+
+Do this with the MINIMUM safe refactor necessary.
+
+I want one canonical structured proposal object used everywhere.
+
+Create or refactor to a single canonical proposal draft shape, something like:
+
+{
+  clientName,
+  clientEmail,
+  jobAddress,
+  projectTitle,
+  jobSummary,
+  scopeIncluded: [],
+  exclusionsAssumptions: [],
+  materialsFixtures: [],
+  pricing: {
+    amountText,
+    depositText,
+    paymentTermsText
+  },
+  timeline: {
+    startText,
+    durationText
+  },
+  warrantyText,
+  nextStepsText,
+  rawTranscriptByStep: {
+    customerRequest,
+    includedWork,
+    exclusions,
+    pricing,
+    timeline
+  }
+}
+
+Important:
+- If a similar schema already exists, improve and reuse it.
+- Do NOT create multiple competing proposal shapes.
+- The preview, DOCX output, and email body should all come from this same canonical structure.
+
+====================
+LIVE UPDATE LOGIC
+====================
+
+As the user speaks for each guided step:
+- update the transcript for that step
+- parse the step into the canonical proposal object
+- immediately update the preview
+
+Do this incrementally and simply.
+
+For example:
+- if user is on “What work is included?” and says three tasks, those should become bullets in “Work Included”
+- if user mentions uncertainty, it should go into “Not Included / Assumptions”
+- if user mentions price informally, normalize it into clean homeowner-friendly wording
+- if user mentions a start time or duration, reflect it in Timeline
+
+Do NOT over-engineer streaming intelligence if the stack does not support it cleanly.
+A practical implementation is acceptable:
+- live transcript visible immediately
+- preview refreshes every few seconds / on pause / on step completion
+That is good enough for V1.
+
+====================
+WRITING / OUTPUT QUALITY
+====================
+
+This is critical.
+
+The preview and final proposal must sound like:
+- a real local contractor
+- clear
+- trustworthy
+- simple
+- homeowner-friendly
+- specific enough to feel real
+- not generic AI mush
+- not overly corporate
+
+Rules:
+- no “we are pleased to provide”
+- no fluff
+- no long bloated paragraphs
+- use short sections and bullets
+- do not hallucinate fake details
+- if uncertain, say so clearly under assumptions/exclusions
+- if price is rough, reflect it honestly
+- preserve the contractor’s own words where appropriate, but clean them up
+
+Proposal preview structure should be:
+
+1. Proposal title
+2. Summary of the job
+3. Work included
+4. Materials / fixtures if mentioned
+5. Not included / assumptions
+6. Price / payment terms
+7. Timeline
+8. Next steps
+
+Make the preview useful even before every field is complete.
+For example, if only first 2–3 prompts are done, still show a partial but well-structured draft.
+
+====================
+NEXT STEPS / CLOSE SECTION
+====================
+
+Every final proposal should include a simple, practical next step.
+
+Examples:
+- “If this looks good, reply to approve and we can schedule the work.”
+- “Once approved, we can confirm the start date.”
+- “A deposit may be required before materials are ordered.”
+
+This should feel normal and practical.
+Not pushy.
+Not sleazy.
+Not over-salesy.
+
+====================
+TRADE-AWARE DEFAULTS
+====================
+
+Add LIGHT trade awareness if possible without big complexity.
+
+Infer a basic trade type when possible:
+- plumbing
+- HVAC
+- electrical
+- painting
+- handyman
+- remodeling
+
+Use it only to slightly improve wording and section defaults.
+Do NOT build huge custom flows.
+This is optional polish, not the core of the build.
+
+====================
+UI / DESIGN REQUIREMENTS
+====================
+
+Keep UI simple and mobile-first.
+
+Desired layout:
+- top: customer info
+- middle left or stacked: guided prompts + transcript area
+- middle/right or below: live proposal preview
+- bottom: action buttons
+
+If screen size is small, stack vertically.
+On mobile, it should still feel easy.
+
+The preview should be visibly readable and feel satisfying to watch update.
+But do NOT spend time over-designing visuals.
+Prioritize product function.
+
+====================
+TECHNICAL CONSTRAINTS
+====================
+
+- Keep the current app structure unless small refactors are needed
+- Do not break env vars or deployment
+- Do not break auth
+- Do not break DOCX generation
+- Do not break Drive save
+- Do not break mail flow
+- Do not introduce huge dependencies unless truly necessary
+- Prefer minimal, clean changes
+- Preserve backward compatibility where reasonable
+
+====================
+DOCX / EMAIL ALIGNMENT
+====================
+
+Once the user finalizes:
+- generate final structured proposal from the same canonical proposal object
+- DOCX output must use the same sections and same ordering as preview
+- email draft/body must align with the same content
+- no mismatch between preview and exported document
+
+====================
+MANUAL EDITING
+====================
+
+Before finalizing, the user should be able to quickly edit the structured output:
+- project title
+- summary
+- included work bullets
+- exclusions/assumptions
+- price
+- timeline
+- next steps
+
+Keep editing lightweight.
+Do not create a giant admin form.
+
+====================
+WHAT NOT TO DO
+====================
+
+Do NOT:
+- rebuild app from scratch
+- convert this into enterprise estimating software
+- add customer portals
+- add project management suite
+- add invoicing system
+- add signatures if not already present
+- add huge onboarding
+- add too many screens
+- force the user into typed forms for everything
+- make the product slower
+
+====================
+SUCCESS CRITERIA
+====================
+
+The result should feel like:
+“Talk through the job, watch the proposal fill itself in, fix anything quickly, send.”
+
+Success means:
+- easier for low-tech contractors
+- output feels more real and trustworthy
+- live preview is satisfying and useful
+- preview / docx / email are aligned
+- current deployment and integrations still work
+
+====================
+DELIVERABLES
+====================
+
+When finished, give me:
+
+1. A concise summary of what you changed
+2. Exact files changed
+3. The new data flow from guided voice input -> structured proposal -> preview -> DOCX/email
+4. Any env var or manual setup steps needed
+5. 5 realistic sample outputs for:
+   - plumbing
+   - handyman
+   - painting
+   - HVAC
+   - small remodel
+6. Any known limitations
+
+====================
+IMPLEMENTATION PRIORITY
+====================
+
+Priority 1:
+guided prompts + live transcript + live structured preview
+
+Priority 2:
+canonical proposal object shared across preview/docx/email
+
+Priority 3:
+improve wording/output quality so it sounds believable
+
+Priority 4:
+lightweight manual editing before finalization
+
+If tradeoffs are needed, prioritize the live guided experience and output quality over extra features.

@@ -5,32 +5,29 @@ const firstNonEmpty = (...values: Array<string | undefined | null>) => {
   return undefined;
 };
 
+// If a direct OPENAI_API_KEY is set, prefer it and use the standard OpenAI endpoint.
+// This avoids routing through the Replit AI proxy in deployed environments where
+// certain models (e.g. whisper-1) may not be available via the proxy.
+const directApiKey = process.env.OPENAI_API_KEY;
+const integrationsApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+
+const resolvedApiKey = firstNonEmpty(directApiKey, integrationsApiKey);
+const resolvedBaseUrl = directApiKey
+  ? firstNonEmpty(process.env.OPENAI_BASE_URL)        // direct key → standard openai.com (or custom URL)
+  : firstNonEmpty(
+      process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,     // integrations key → Replit proxy
+      process.env.OPENAI_BASE_URL,
+    );
+
 export const appConfig = {
-  openaiApiKey: firstNonEmpty(
-    process.env.OPENAI_API_KEY,
-    process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  ),
-  openaiBaseUrl: firstNonEmpty(
-    process.env.OPENAI_BASE_URL,
-    process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  ),
-  openaiChatModel: firstNonEmpty(process.env.OPENAI_MODEL, "gpt-5.1")!,
+  openaiApiKey: resolvedApiKey,
+  openaiBaseUrl: resolvedBaseUrl,
+  openaiChatModel: firstNonEmpty(process.env.OPENAI_MODEL, "gpt-4.5")!,
   openaiTranscriptionModel: firstNonEmpty(
     process.env.OPENAI_TRANSCRIPTION_MODEL,
     "whisper-1",
   )!,
   databaseUrl: firstNonEmpty(process.env.DATABASE_URL),
-  googleClientId: firstNonEmpty(process.env.GOOGLE_CLIENT_ID),
-  googleClientSecret: firstNonEmpty(process.env.GOOGLE_CLIENT_SECRET),
-  googleRefreshToken: firstNonEmpty(process.env.GOOGLE_REFRESH_TOKEN),
-  googleRedirectUri: firstNonEmpty(
-    process.env.GOOGLE_REDIRECT_URI,
-    "https://developers.google.com/oauthplayground",
-  )!,
-  googleDriveRootFolder: firstNonEmpty(
-    process.env.GOOGLE_DRIVE_ROOT_FOLDER,
-    "Proposal Builder",
-  )!,
 };
 
 export function hasOpenAIConfig() {
@@ -42,10 +39,5 @@ export function hasDatabaseConfig() {
 }
 
 export function hasGoogleOAuthConfig() {
-  return Boolean(
-    appConfig.googleClientId &&
-      appConfig.googleClientSecret &&
-      appConfig.googleRefreshToken,
-  );
+  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
-

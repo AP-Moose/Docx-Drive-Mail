@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { proposals, type Proposal, type InsertProposal } from "@shared/schema";
+import { proposals, googleTokens, type Proposal, type InsertProposal, type GoogleToken, type InsertGoogleToken } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
@@ -9,6 +9,10 @@ export interface IStorage {
   updateProposal(id: number, data: Partial<Proposal>): Promise<Proposal>;
   deleteProposal(id: number): Promise<void>;
   getNextVersion(customerName: string): Promise<number>;
+  getGoogleToken(): Promise<GoogleToken | undefined>;
+  upsertGoogleToken(data: InsertGoogleToken): Promise<GoogleToken>;
+  updateGoogleTokenAccess(id: number, accessToken: string, tokenExpiry: Date | null): Promise<void>;
+  deleteGoogleToken(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -57,6 +61,28 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(proposals.version));
     if (existing.length === 0) return 1;
     return (existing[0].version || 0) + 1;
+  }
+
+  async getGoogleToken(): Promise<GoogleToken | undefined> {
+    const [row] = await db.select().from(googleTokens).orderBy(desc(googleTokens.updatedAt)).limit(1);
+    return row;
+  }
+
+  async upsertGoogleToken(data: InsertGoogleToken): Promise<GoogleToken> {
+    await db.delete(googleTokens);
+    const [row] = await db.insert(googleTokens).values(data).returning();
+    return row;
+  }
+
+  async updateGoogleTokenAccess(id: number, accessToken: string, tokenExpiry: Date | null): Promise<void> {
+    await db
+      .update(googleTokens)
+      .set({ accessToken, tokenExpiry, updatedAt: new Date() })
+      .where(eq(googleTokens.id, id));
+  }
+
+  async deleteGoogleToken(): Promise<void> {
+    await db.delete(googleTokens);
   }
 }
 

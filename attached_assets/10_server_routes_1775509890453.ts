@@ -1,14 +1,13 @@
 import express from "express";
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
-import { randomBytes } from "crypto";
-import { parse as parseCookies } from "cookie";
 import { storage } from "./storage";
 import { generateProposal, refineProposal } from "./ai";
 import { generateDocx } from "./docx-generator";
 import { uploadToDrive, setFilePublic, isDriveConnected, testDriveConnection, getDriveUserEmail } from "./google-drive";
 import { sendGmailMessage, isGmailConnected, testGmailConnection, getGmailUserEmail } from "./google-mail";
 import { transcribeAudio } from "./transcribe";
+import { z } from "zod";
 import { insertProposalSchema, type Proposal } from "@shared/schema";
 import {
   appConfig,
@@ -16,23 +15,8 @@ import {
   hasGoogleOAuthConfig,
   hasOpenAIConfig,
 } from "./config";
+import { hasDatabase } from "./db";
 import { getGoogleProviderMode } from "./google-auth";
-
-interface OAuthTokenResponse {
-  access_token?: string;
-  refresh_token?: string;
-  expires_in?: number;
-  scope?: string;
-  token_type?: string;
-  error?: string;
-  error_description?: string;
-}
-
-interface GoogleUserInfo {
-  email?: string;
-  name?: string;
-  sub?: string;
-}
 
 function buildFinalizeResponse(proposal: Proposal) {
   const emailSent = proposal.mode === "proposal_email" ? Boolean(proposal.gmailMessageId) : false;
@@ -47,157 +31,19 @@ function buildFinalizeResponse(proposal: Proposal) {
       nextStepComplete: proposal.mode === "proposal_email" ? fileSaved && emailSent : fileSaved,
     },
     links: {
-      driveWebLink: proposal.driveWebLink ?? undefined,
+      driveWebLink: proposal.driveWebLink || undefined,
       gmailSentUrl: emailSent ? "https://mail.google.com/mail/#sent" : undefined,
     },
   };
 }
 
-function getRedirectBase(req: Request): string {
-  const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol;
-  return `${proto}://${req.get("host")}`;
-}
-
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
-  // ─── Google OAuth Routes ──────────────────────────────────────────────────
-  app.get("/auth/google", (req: Request, res: Response) => {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      return res.redirect("/settings?error=oauth_not_configured");
-    }
-    const state = randomBytes(16).toString("hex");
-    res.cookie("oauth_state", state, {
-      httpOnly: true,
-      sameSite: "lax",
-      maxAge: 10 * 60 * 1000,
-      secure: req.headers["x-forwarded-proto"] === "https",
-    });
-    const redirectUri = `${getRedirectBase(req)}/auth/google/callback`;
-    const scopes = [
-      "openid",
-      "email",
-      "profile",
-      "https://www.googleapis.com/auth/drive.file",
-      "https://www.googleapis.com/auth/gmail.send",
-    ];
-    const url =
-      "https://accounts.google.com/o/oauth2/v2/auth?" +
-      new URLSearchParams({
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        response_type: "code",
-        scope: scopes.join(" "),
-        access_type: "offline",
-        prompt: "consent",
-        state,
-      }).toString();
-    res.redirect(url);
-  });
-
-  app.get("/auth/google/callback", async (req: Request, res: Response) => {
-    const code = req.query.code as string | undefined;
-    const oauthError = req.query.error as string | undefined;
-    const returnedState = req.query.state as string | undefined;
-    const cookies = parseCookies(req.headers.cookie ?? "");
-    const expectedState = cookies.oauth_state;
-
-    res.clearCookie("oauth_state");
-
-    if (oauthError || !code) {
-      return res.redirect(`/settings?error=${oauthError ?? "oauth_cancelled"}`);
-    }
-
-    if (!returnedState || !expectedState || returnedState !== expectedState) {
-      console.warn("OAuth state mismatch — possible CSRF attempt");
-      return res.redirect("/settings?error=oauth_state_mismatch");
-    }
-
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    if (!clientId || !clientSecret) {
-      return res.redirect("/settings?error=oauth_not_configured");
-    }
-
-    try {
-      const redirectUri = `${getRedirectBase(req)}/auth/google/callback`;
-
-      const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          code,
-          client_id: clientId,
-          client_secret: clientSecret,
-          redirect_uri: redirectUri,
-          grant_type: "authorization_code",
-        }),
-      });
-
-      const tokens: OAuthTokenResponse = await tokenResp.json() as OAuthTokenResponse;
-      if (!tokens.access_token) {
-        console.error("Token exchange failed:", tokens);
-        return res.redirect("/settings?error=token_exchange_failed");
-      }
-
-      let email: string | null = null;
-      try {
-        const userResp = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-          headers: { Authorization: `Bearer ${tokens.access_token}` },
-        });
-        const user: GoogleUserInfo = await userResp.json() as GoogleUserInfo;
-        email = user.email ?? null;
-      } catch {
-        // Non-fatal — email is cosmetic
-      }
-
-      const tokenExpiry = tokens.expires_in
-        ? new Date(Date.now() + tokens.expires_in * 1000)
-        : null;
-
-      await storage.upsertGoogleToken({
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token ?? null,
-        tokenExpiry,
-        email,
-        scope: tokens.scope ?? null,
-      });
-
-      res.redirect("/settings?connected=true");
-    } catch (e) {
-      console.error("OAuth callback error:", e);
-      res.redirect("/settings?error=oauth_failed");
-    }
-  });
-
-  app.post("/auth/google/disconnect", async (_req: Request, res: Response) => {
-    try {
-      await storage.deleteGoogleToken();
-      res.json({ success: true });
-    } catch {
-      res.status(500).json({ error: "Failed to disconnect" });
-    }
-  });
-
-  // ─── PIN Auth ─────────────────────────────────────────────────────────────
-  app.post("/api/auth/pin", (req: Request, res: Response) => {
-    const appPin = process.env.APP_PIN;
-    if (!appPin) {
-      return res.json({ success: true, pinRequired: false });
-    }
-    const { pin } = req.body as { pin?: string };
-    if (!pin || !/^\d{4,6}$/.test(pin)) {
-      return res.status(400).json({ success: false, error: "PIN must be 4–6 digits" });
-    }
-    if (pin === appPin) {
-      return res.json({ success: true, pinRequired: true });
-    }
-    return res.json({ success: false, pinRequired: true, error: "Incorrect PIN" });
-  });
-
   // ─── Status ────────────────────────────────────────────────────────────────
-  app.get("/api/status", async (_req: Request, res: Response) => {
-    const [drive, gmail] = await Promise.all([isDriveConnected(), isGmailConnected()]);
-    res.json({ drive, gmail });
+  app.get("/api/status", (_req: Request, res: Response) => {
+    res.json({
+      drive: isDriveConnected(),
+      gmail: isGmailConnected(),
+    });
   });
 
   app.get("/api/settings/status", async (_req: Request, res: Response) => {
@@ -209,10 +55,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         getGmailUserEmail(),
       ]);
       res.json({
-        drive: { connected: driveOk, email: driveEmail ?? undefined },
-        gmail: { connected: gmailOk, email: gmailEmail ?? undefined },
+        drive: { connected: driveOk, email: driveEmail || undefined },
+        gmail: { connected: gmailOk, email: gmailEmail || undefined },
       });
-    } catch {
+    } catch (e) {
       res.json({
         drive: { connected: false },
         gmail: { connected: false },
@@ -231,7 +77,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       },
       database: {
         configured: hasDatabaseConfig(),
-        connected: hasDatabaseConfig(),
+        connected: hasDatabase,
       },
       google: {
         providerMode,
@@ -250,13 +96,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (!req.body || !Buffer.isBuffer(req.body) || req.body.length === 0) {
           return res.status(400).json({ error: "No audio data received" });
         }
-        const transcript = await transcribeAudio(req.body);
-        res.json({ transcript });
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Transcription failed";
-        res.status(500).json({ error: msg });
-      }
+      const transcript = await transcribeAudio(req.body);
+      res.json({ transcript });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Transcription failed" });
     }
+  }
   );
 
   // ─── Proposals CRUD ─────────────────────────────────────────────────────────
@@ -264,7 +109,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const list = await storage.getAllProposals();
       res.json(list);
-    } catch {
+    } catch (e) {
       res.status(500).json({ error: "Failed to load proposals" });
     }
   });
@@ -274,7 +119,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const p = await storage.getProposal(Number(req.params.id));
       if (!p) return res.status(404).json({ error: "Not found" });
       res.json(p);
-    } catch {
+    } catch (e) {
       res.status(500).json({ error: "Failed to load proposal" });
     }
   });
@@ -309,7 +154,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       await storage.deleteProposal(Number(req.params.id));
       res.status(204).send();
-    } catch {
+    } catch (e) {
       res.status(500).json({ error: "Failed to delete proposal" });
     }
   });
@@ -367,7 +212,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ─── DOCX download ─────────────────────────────────────────────────────────
+  // ─── DOCX download (for preview / manual download) ─────────────────────────
   app.get("/api/proposals/:id/docx", async (req: Request, res: Response) => {
     try {
       const proposal = await storage.getProposal(Number(req.params.id));
@@ -395,6 +240,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const { buffer, filename } = await generateDocx(proposal);
 
+      // Upload to Google Drive
       const { fileId, webViewLink } = await uploadToDrive(
         buffer,
         filename,
@@ -402,8 +248,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         proposal.customerName
       );
 
+      // Make it public (anyone with link can view)
       await setFilePublic(fileId);
 
+      // Save Drive info to DB
       const updated = await storage.updateProposal(proposal.id, {
         driveFileId: fileId,
         driveWebLink: webViewLink,
@@ -411,16 +259,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
 
       res.json({ fileId, webViewLink, proposal: updated });
-    } catch (e: unknown) {
+    } catch (e: any) {
       console.error(e);
-      if (e instanceof Error && e.message === "GOOGLE_DRIVE_NOT_CONNECTED") {
+      if (e.message === "GOOGLE_DRIVE_NOT_CONNECTED") {
         return res.status(503).json({
           error: "Google Drive is not connected. Please connect your Google account.",
           code: "DRIVE_NOT_CONNECTED",
         });
       }
-      const msg = e instanceof Error ? e.message : "Drive upload failed";
-      res.status(500).json({ error: `Drive upload failed: ${msg}` });
+      res.status(500).json({ error: "Drive upload failed: " + e.message });
     }
   });
 
@@ -453,20 +300,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
 
       res.json(buildFinalizeResponse(updated));
-    } catch (e: unknown) {
+    } catch (e: any) {
       console.error(e);
-      if (e instanceof Error && e.message === "GMAIL_NOT_CONNECTED") {
+      if (e.message === "GMAIL_NOT_CONNECTED") {
         return res.status(503).json({
           error: "Gmail is not connected. Please connect your Google account.",
           code: "GMAIL_NOT_CONNECTED",
         });
       }
-      const msg = e instanceof Error ? e.message : "Gmail send failed";
-      res.status(500).json({ error: `Gmail send failed: ${msg}` });
+      res.status(500).json({ error: "Gmail send failed: " + e.message });
     }
   });
 
   // ─── Full pipeline ────────────────────────────────────────────────────────
+  // Runs: generate docx → upload drive → set public → send gmail
   app.post("/api/proposals/:id/finalize", async (req: Request, res: Response) => {
     try {
       const proposal = await storage.getProposal(Number(req.params.id));
@@ -476,6 +323,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const { buffer, filename } = await generateDocx(proposal);
 
+      // Upload to Drive
       const { fileId, webViewLink } = await uploadToDrive(
         buffer,
         filename,
@@ -507,22 +355,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
 
       res.json(buildFinalizeResponse(updated));
-    } catch (e: unknown) {
+    } catch (e: any) {
       console.error(e);
-      if (e instanceof Error && e.message === "GOOGLE_DRIVE_NOT_CONNECTED") {
+      if (e.message === "GOOGLE_DRIVE_NOT_CONNECTED") {
         return res.status(503).json({
           error: "Google Drive is not connected.",
           code: "DRIVE_NOT_CONNECTED",
         });
       }
-      if (e instanceof Error && e.message === "GMAIL_NOT_CONNECTED") {
+      if (e.message === "GMAIL_NOT_CONNECTED") {
         return res.status(503).json({
           error: "Gmail is not connected.",
           code: "GMAIL_NOT_CONNECTED",
         });
       }
-      const msg = e instanceof Error ? e.message : "Finalize failed";
-      res.status(500).json({ error: `Finalize failed: ${msg}` });
+      res.status(500).json({ error: "Finalize failed: " + e.message });
     }
   });
 

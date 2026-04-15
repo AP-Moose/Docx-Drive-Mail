@@ -1,6 +1,5 @@
-import { useLocation, useSearch } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   HardHat,
@@ -13,12 +12,8 @@ import {
   Database,
   Brain,
   Cable,
-  Link,
-  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 
 interface ConnectionStatus {
   drive: { connected: boolean; email?: string };
@@ -36,7 +31,7 @@ interface RuntimeStatus {
     connected: boolean;
   };
   google: {
-    providerMode: "inapp" | "oauth" | "replit" | "none";
+    providerMode: "oauth" | "replit" | "none";
     oauthConfigured: boolean;
     usingReplitConnectors: boolean;
   };
@@ -86,28 +81,6 @@ function StatusCard({
 
 export default function Settings() {
   const [, navigate] = useLocation();
-  const search = useSearch();
-  const { toast } = useToast();
-  const qc = useQueryClient();
-
-  useEffect(() => {
-    const params = new URLSearchParams(search);
-    if (params.get("connected") === "true") {
-      toast({ title: "Google connected", description: "Drive and Gmail are ready to use." });
-      navigate("/settings", { replace: true });
-    } else if (params.get("error")) {
-      const errorMap: Record<string, string> = {
-        oauth_not_configured: "GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set.",
-        oauth_cancelled: "Google sign-in was cancelled.",
-        token_exchange_failed: "Could not exchange the auth code for tokens.",
-        oauth_failed: "Google sign-in failed. Please try again.",
-        oauth_state_mismatch: "Sign-in request could not be verified. Please try again.",
-      };
-      const msg = errorMap[params.get("error")!] || "Google sign-in failed.";
-      toast({ title: "Connection failed", description: msg, variant: "destructive" });
-      navigate("/settings", { replace: true });
-    }
-  }, [search]);
 
   const {
     data: connections,
@@ -127,23 +100,8 @@ export default function Settings() {
     queryKey: ["/api/settings/runtime"],
   });
 
-  const disconnectMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/auth/google/disconnect"),
-    onSuccess: () => {
-      toast({ title: "Disconnected", description: "Google account removed." });
-      qc.invalidateQueries({ queryKey: ["/api/settings/status"] });
-      qc.invalidateQueries({ queryKey: ["/api/settings/runtime"] });
-    },
-    onError: () => {
-      toast({ title: "Failed to disconnect", variant: "destructive" });
-    },
-  });
-
   const isLoading = connectionsLoading || runtimeLoading;
   const isFetching = connectionsFetching || runtimeFetching;
-  const isConnected = connections?.drive.connected || connections?.gmail.connected;
-  const canConnect = runtime?.google.oauthConfigured;
-  const usingReplit = runtime?.google.providerMode === "replit";
 
   const refreshAll = async () => {
     await Promise.all([refetchConnections(), refetchRuntime()]);
@@ -230,72 +188,13 @@ export default function Settings() {
                 }
               />
 
-              {!usingReplit && canConnect && isConnected && (
-                <Button
-                  data-testid="button-disconnect-google"
-                  variant="outline"
-                  className="w-full gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                  onClick={() => disconnectMutation.mutate()}
-                  disabled={disconnectMutation.isPending}
-                >
-                  {disconnectMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <LogOut className="w-4 h-4" />
-                  )}
-                  Disconnect Google account
-                </Button>
-              )}
-
-              {!usingReplit && canConnect && !isConnected && (
-                <>
-                  <a
-                    href="/auth/google"
-                    data-testid="button-connect-google"
-                    className="flex items-center justify-center gap-2 w-full rounded-md border border-primary/30 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium transition-colors hover:bg-primary/90"
-                  >
-                    <Link className="w-4 h-4" />
-                    Connect Google account
-                  </a>
-                  <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      Authorized redirect URI
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-                      Make sure this is added in your Google Cloud Console → OAuth credentials → Authorized redirect URIs:
-                    </p>
-                    <p className="text-xs font-mono text-slate-800 dark:text-slate-200 break-all bg-slate-100 dark:bg-slate-800 rounded px-2 py-1.5 select-all">
-                      {window.location.origin}/auth/google/callback
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {!usingReplit && !canConnect && (
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mt-2">
+              {(!connections.drive.connected || !connections.gmail.connected) && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mt-4">
                   <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
-                    Google OAuth not configured
+                    Account disconnected
                   </p>
                   <p className="text-sm text-amber-700 dark:text-amber-300">
-                    Add <code className="font-mono bg-amber-100 px-1 rounded">GOOGLE_CLIENT_ID</code> and{" "}
-                    <code className="font-mono bg-amber-100 px-1 rounded">GOOGLE_CLIENT_SECRET</code> as Replit
-                    Secrets, then set the authorized redirect URI in your Google Cloud Console to:
-                  </p>
-                  <p className="mt-2 text-xs font-mono text-amber-800 break-all bg-amber-100 rounded px-2 py-1">
-                    {window.location.origin}/auth/google/callback
-                  </p>
-                </div>
-              )}
-
-              {usingReplit && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mt-2">
-                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">
-                    Using Replit connector auth
-                  </p>
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    Connections are managed through Replit. To enable self-service sign-in, add{" "}
-                    <code className="font-mono bg-blue-100 px-1 rounded">GOOGLE_CLIENT_ID</code> and{" "}
-                    <code className="font-mono bg-blue-100 px-1 rounded">GOOGLE_CLIENT_SECRET</code> as Secrets.
+                    Set the Google OAuth environment variables for the missing service and restart the app. Replit connector auth still works if the app is running in Replit.
                   </p>
                 </div>
               )}
@@ -353,8 +252,8 @@ export default function Settings() {
                 testId="status-google-provider"
                 title="Google Provider Mode"
                 description={
-                  runtime.google.providerMode === "inapp"
-                    ? "In-app OAuth — contractors connect via Sign in with Google"
+                  runtime.google.providerMode === "oauth"
+                    ? "Using standard Google OAuth env vars for local Drive and Gmail access"
                     : runtime.google.providerMode === "replit"
                       ? "Using Replit connectors for Drive and Gmail access"
                       : "No Google provider is configured"
