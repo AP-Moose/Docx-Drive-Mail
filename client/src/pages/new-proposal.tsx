@@ -166,10 +166,8 @@ function buildDraftText(transcripts: Record<string, string>): string {
   return parts.join("\n");
 }
 
-function buildQuickDraftTitle(text: string, jobAddress?: string): string {
-  const trade = inferTradeType(text);
-  const title = `${trade} PROPOSAL`;
-  return jobAddress ? `${title}\n${jobAddress}` : title;
+function buildQuickDraftTitle(jobAddress?: string): string {
+  return jobAddress ? `PROPOSAL\n${jobAddress}` : "PROPOSAL";
 }
 
 function buildQuickDraftText(text: string): string {
@@ -1035,7 +1033,7 @@ export default function NewProposal() {
                   </summary>
                   <div className="mt-2">
                     <ProposalPreview
-                      title={buildQuickDraftTitle(quickTranscript, form.jobAddress)}
+                      title={buildQuickDraftTitle(form.jobAddress)}
                       text={buildQuickDraftText(quickTranscript)}
                       customerName={form.customerName}
                       jobAddress={form.jobAddress || undefined}
