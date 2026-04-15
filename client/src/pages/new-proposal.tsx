@@ -219,10 +219,8 @@ function ProgressBar({ step, guided }: { step: Step; guided: boolean }) {
   if (step === "saving") displayIndex = 3;
   const progress = ((Math.max(displayIndex, 0) + 1) / displaySteps.length) * 100;
   return (
-    <div className="w-full rounded-full bg-white/20 p-0.5">
-      <div className="h-2 rounded-full bg-white/15">
-        <div className="h-full rounded-full bg-white transition-all duration-500" style={{ width: `${progress}%` }} />
-      </div>
+    <div className="w-full rounded-full bg-white/20 h-1.5">
+      <div className="h-full rounded-full bg-white transition-all duration-500" style={{ width: `${progress}%` }} />
     </div>
   );
 }
@@ -791,7 +789,7 @@ export default function NewProposal() {
   const hasDraftContent = Object.values(stepTranscripts).some((v) => v.trim());
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f7f8f6_0%,#ffffff_22%,#ffffff_100%)]">
+    <div className="min-h-screen bg-background">
       <div className="mx-auto flex min-h-screen flex-col max-w-2xl">
         {/* ─── Header ─────────────────────────────────────────────── */}
         <div className="bg-primary px-5 pb-6 pt-10 text-primary-foreground">

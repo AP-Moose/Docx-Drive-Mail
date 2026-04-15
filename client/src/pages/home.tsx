@@ -9,9 +9,7 @@ export default function Home() {
     <div className="min-h-screen bg-background flex flex-col max-w-2xl mx-auto">
       <div className="bg-primary px-5 pt-8 pb-5 text-primary-foreground">
         <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-white/95 px-2 py-1.5 shadow-sm">
-            <img src={logoPath} alt="ProLynk" className="h-7 w-auto" />
-          </div>
+          <img src={logoPath} alt="ProLynk" className="h-24 w-auto max-w-[200px]" />
           <div>
             <a href="https://system.prolynk.io" target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold uppercase tracking-[0.26em] text-primary-foreground/70 hover:text-primary-foreground transition-colors">Dave · ProLynk</a>
             <h1 className="text-lg font-bold leading-tight">Proposal Builder</h1>
@@ -20,7 +18,7 @@ export default function Home() {
       </div>
 
       <div className="flex-1 px-5 pb-4 pt-5">
-        <div className="space-y-4 rounded-[34px] bg-white/96 p-4 shadow-[0_40px_90px_-50px_rgba(15,23,42,0.55)]">
+        <div className="space-y-4 rounded-[34px] bg-card p-4 shadow-[0_40px_90px_-50px_rgba(0,0,0,0.8)]">
           <button
             data-testid="button-new-proposal"
             onClick={() => navigate("/new?mode=proposal_email")}
