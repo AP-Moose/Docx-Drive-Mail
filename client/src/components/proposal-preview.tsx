@@ -111,6 +111,41 @@ export default function ProposalPreview({
           overflow-y: auto;
           box-shadow: 0 30px 70px -45px rgba(15, 23, 42, 0.35);
         }
+        @media (max-width: 420px) {
+          .proposal-preview-container {
+            padding: 18px 16px 22px;
+            font-size: 13.5px;
+            border-radius: 18px;
+          }
+          .proposal-preview-topbar {
+            gap: 10px;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+          }
+          .proposal-preview-logo {
+            max-width: 110px;
+          }
+          .proposal-preview-title {
+            font-size: 20px;
+          }
+          .proposal-preview-address {
+            font-size: 12px;
+            margin-bottom: 18px;
+          }
+          .proposal-heading {
+            font-size: 10px;
+            margin-top: 20px;
+          }
+          .proposal-bullet {
+            padding-left: 16px;
+            margin-bottom: 4px;
+          }
+          .proposal-preview-customer {
+            margin-top: 16px;
+            padding-top: 12px;
+            font-size: 11px;
+          }
+        }
         .proposal-preview-topbar {
           display: flex;
           align-items: center;

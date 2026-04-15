@@ -342,6 +342,8 @@ export default function NewProposal() {
   const [isChatTranscribing, setIsChatTranscribing] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [showTypedAiInput, setShowTypedAiInput] = useState(false);
+  const [showGuidedTypeInput, setShowGuidedTypeInput] = useState(false);
+  const [showQuickTypeInput, setShowQuickTypeInput] = useState(false);
   const chatRecorderRef = useRef<MediaRecorder | null>(null);
   const editExactTextRef = useRef<HTMLDivElement | null>(null);
 
@@ -360,6 +362,11 @@ export default function NewProposal() {
   const [isQuickListening, setIsQuickListening] = useState(false);
   const [isQuickTranscribing, setIsQuickTranscribing] = useState(false);
   const quickRecorderRef = useRef<MediaRecorder | null>(null);
+
+  // Close type input when switching guided prompts
+  useEffect(() => {
+    setShowGuidedTypeInput(false);
+  }, [guidedStepIndex]);
 
   const { data: draftProposal } = useQuery<Proposal>({
     queryKey: ["/api/proposals", draftId],
@@ -908,7 +915,7 @@ export default function NewProposal() {
           {/* GUIDED STEP */}
           {step === "guided" && (
             <div className="space-y-4">
-              {/* Customer info bar */}
+              {/* Customer info bar with prompt dots */}
               <div className="flex items-center gap-3 rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3">
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold truncate">{form.customerName}</p>
@@ -939,152 +946,39 @@ export default function NewProposal() {
                 </div>
               </div>
 
-              {/* Two-column layout — stacks on mobile, preview in collapsible */}
-              <div className="flex flex-col gap-5 items-start">
-                {/* Prompt + recorder (full width on all screens) */}
-                <div className="w-full space-y-3">
-                  {/* Prompt card */}
-                  <div className="rounded-[28px] border border-border/80 bg-card px-5 py-6 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.25)] space-y-5">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
-                          Step {guidedStepIndex + 1} of {GUIDED_PROMPTS.length}
-                        </p>
-                        {currentPrompt.optional && (
-                          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                            Optional
-                          </span>
-                        )}
-                      </div>
-                      <h2 className="text-[22px] font-semibold tracking-tight leading-snug">
-                        {currentPrompt.question}
-                      </h2>
-                      <p className="text-sm text-muted-foreground">{currentPrompt.hint}</p>
-                    </div>
-
-                    {/* Transcript / text area */}
-                    <Textarea
-                      data-testid={`textarea-prompt-${guidedStepIndex}`}
-                      className="min-h-[100px] rounded-[20px] border-border/80 bg-background text-base leading-7 resize-none"
-                      placeholder={currentPrompt.placeholder}
-                      value={currentTranscript}
-                      onChange={(e) => {
-                        const key = currentPrompt.key as StepKey;
-                        setStepTranscripts((current) => ({
-                          ...current,
-                          [key]: e.target.value,
-                        }));
-                      }}
+              {/* Live draft preview */}
+              {hasDraftContent ? (
+                <details className="w-full group" open>
+                  <summary className="flex items-center gap-2 cursor-pointer px-1 list-none">
+                    <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+                      Proposal preview — updates as you talk
+                    </p>
+                    <svg className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </summary>
+                  <div className="mt-2">
+                    <ProposalPreview
+                      title={draftTitle}
+                      text={draftText}
+                      customerName={form.customerName}
+                      customerEmail={form.customerEmail || undefined}
+                      jobAddress={form.jobAddress || undefined}
                     />
-
-                    {/* Clear button */}
-                    {currentTranscript && (
-                      <button
-                        type="button"
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        onClick={() => {
-                          const key = currentPrompt.key as StepKey;
-                          setStepTranscripts((current) => ({ ...current, [key]: "" }));
-                        }}
-                      >
-                        Clear this answer
-                      </button>
-                    )}
                   </div>
-
-                  {/* Navigation row */}
-                  <div className="flex items-center gap-2">
-                    {guidedStepIndex > 0 && (
-                      <Button
-                        variant="secondary"
-                        className="h-10 rounded-2xl px-4 text-sm"
-                        onClick={() => setGuidedStepIndex((i) => i - 1)}
-                        data-testid="button-guided-back"
-                      >
-                        <ArrowLeft className="mr-1.5 h-4 w-4" />
-                        Back
-                      </Button>
-                    )}
-                    <div className="flex-1" />
-                    {currentPrompt.optional && !currentTranscript && (
-                      <button
-                        type="button"
-                        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-2"
-                        onClick={() => {
-                          if (guidedStepIndex < GUIDED_PROMPTS.length - 1) {
-                            setGuidedStepIndex((i) => i + 1);
-                          } else {
-                            triggerGenerate();
-                          }
-                        }}
-                        data-testid="button-guided-skip"
-                      >
-                        <SkipForward className="h-3.5 w-3.5" />
-                        Skip
-                      </button>
-                    )}
-                    {guidedStepIndex < GUIDED_PROMPTS.length - 1 ? (
-                      <Button
-                        className="h-10 rounded-2xl px-5 text-sm"
-                        onClick={() => setGuidedStepIndex((i) => i + 1)}
-                        data-testid="button-guided-next"
-                      >
-                        Next
-                        <ArrowRight className="ml-1.5 h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <Button
-                        className="h-10 rounded-2xl px-5 text-sm"
-                        onClick={triggerGenerate}
-                        disabled={isLoading}
-                        data-testid="button-guided-generate"
-                      >
-                        {isLoading ? (
-                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Zap className="mr-1.5 h-4 w-4" />
-                        )}
-                        Generate
-                      </Button>
-                    )}
+                </details>
+              ) : (
+                <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-border/50 bg-muted/15 px-6 py-12 text-center w-full">
+                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/8">
+                    <Mic className="h-5 w-5 text-primary/50" />
                   </div>
+                  <p className="text-sm font-semibold text-muted-foreground">
+                    Proposal preview appears here
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground/60">
+                    Tap the mic below and start talking — it updates live
+                  </p>
                 </div>
-
-                {/* Live draft preview — collapsible on mobile */}
-                {hasDraftContent && (
-                  <details className="w-full group" open>
-                    <summary className="flex items-center gap-2 cursor-pointer px-1 list-none">
-                      <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                      <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
-                        Proposal preview — updates as you talk
-                      </p>
-                      <svg className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                    </summary>
-                    <div className="mt-2">
-                      <ProposalPreview
-                        title={draftTitle}
-                        text={draftText}
-                        customerName={form.customerName}
-                        customerEmail={form.customerEmail || undefined}
-                        jobAddress={form.jobAddress || undefined}
-                      />
-                    </div>
-                  </details>
-                )}
-                {!hasDraftContent && (
-                  <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-border/50 bg-muted/15 px-6 py-12 text-center w-full">
-                    <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/8">
-                      <Mic className="h-5 w-5 text-primary/50" />
-                    </div>
-                    <p className="text-sm font-semibold text-muted-foreground">
-                      Proposal preview appears here
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground/60">
-                      Tap the mic and start talking — it updates live
-                    </p>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           )}
 
@@ -1104,38 +998,19 @@ export default function NewProposal() {
                 </span>
               </div>
 
-              <div className="rounded-[28px] border border-border/80 bg-card px-5 py-6 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.25)] space-y-5">
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
-                    Describe the job
-                  </p>
-                  <h2 className="text-[22px] font-semibold tracking-tight leading-snug">
-                    Say it in your own words
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Hit record, describe the whole job, then hit generate. One take.
-                  </p>
-                </div>
-
-                {/* Transcript / text area */}
-                <Textarea
-                  data-testid="textarea-quick-scope"
-                  className="min-h-[120px] rounded-[20px] border-border/80 bg-background text-base leading-7 resize-none"
-                  placeholder="e.g. Kitchen faucet replacement for John at 123 Main St. Remove old faucet, install new Delta pull-down. $650 flat, can start Thursday."
-                  value={quickTranscript}
-                  onChange={(e) => setQuickTranscript(e.target.value)}
-                />
-
-                {quickTranscript && (
+              {/* Transcript display */}
+              {quickTranscript && (
+                <div className="rounded-2xl bg-primary/5 border border-primary/15 px-4 py-4">
+                  <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{quickTranscript}</p>
                   <button
                     type="button"
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    className="mt-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                     onClick={() => setQuickTranscript("")}
                   >
                     Clear
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1164,26 +1039,8 @@ export default function NewProposal() {
               </div>
 
               <div className="space-y-3 rounded-[28px] border border-border/80 bg-card px-5 py-4 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.28)]">
-                <div className="flex items-center justify-between gap-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Customer view</p>
-                  <button
-                    onClick={() => editExactTextRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                    className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
-                  >
-                    Edit
-                  </button>
-                </div>
-
-                <ProposalPreview
-                  title={proposal.proposalTitle || undefined}
-                  text={editedText}
-                  customerName={proposal.customerName}
-                  customerEmail={proposal.customerEmail || undefined}
-                  jobAddress={proposal.jobAddress || undefined}
-                />
-
-                <div ref={editExactTextRef} className="space-y-2 rounded-2xl border border-border/80 bg-background px-4 py-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Edit exact text</p>
+                <div className="space-y-2 rounded-2xl border border-border/80 bg-background px-4 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Edit proposal text</p>
                   <Textarea
                     data-testid="textarea-proposal"
                     className="min-h-[220px] rounded-[24px] border-border/80 bg-card px-5 py-5 font-mono text-sm leading-7 resize-none"
@@ -1191,6 +1048,24 @@ export default function NewProposal() {
                     onChange={(event) => setEditedText(event.target.value)}
                   />
                 </div>
+
+                <details className="w-full group">
+                  <summary className="flex items-center gap-2 cursor-pointer px-1 list-none">
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+                      Customer preview
+                    </p>
+                    <svg className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </summary>
+                  <div className="mt-2">
+                    <ProposalPreview
+                      title={proposal.proposalTitle || undefined}
+                      text={editedText}
+                      customerName={proposal.customerName}
+                      customerEmail={proposal.customerEmail || undefined}
+                      jobAddress={proposal.jobAddress || undefined}
+                    />
+                  </div>
+                </details>
               </div>
 
               {/* DOCX download link */}
@@ -1388,7 +1263,7 @@ export default function NewProposal() {
 
         {/* ─── Sticky footer ───────────────────────────────────────── */}
         {(step === "info" || step === "guided" || step === "quick" || step === "review" || step === "confirm") && (
-          <div className="sticky bottom-0 border-t bg-background/95 px-5 py-4 backdrop-blur">
+          <div className="sticky bottom-0 border-t bg-background/95 px-5 pt-4 pb-4 backdrop-blur" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
             {/* Review step: AI chat bar */}
             {step === "review" && (
               <div className="mb-3 space-y-2 rounded-[20px] border border-border/70 bg-background/98 px-3 py-2.5 shadow-[0_10px_24px_-20px_rgba(17,24,39,0.22)]">
@@ -1480,18 +1355,45 @@ export default function NewProposal() {
               </div>
             )}
 
-            {/* Guided step: Voice + Generate in footer */}
+            {/* Guided step: Prompt + Voice + Type + Generate in footer */}
             {step === "guided" && (
               <>
                 <div className="mb-3 space-y-2 rounded-[20px] border border-border/70 bg-background/98 px-3 py-2.5 shadow-[0_10px_24px_-20px_rgba(17,24,39,0.22)]">
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/65">{currentPrompt.question}</p>
-                    {(isGuidedListening || isGuidedTranscribing) && (
-                      <p className="text-xs text-muted-foreground">
-                        {isGuidedListening ? "Listening…" : isGuidedTranscribing ? "Transcribing…" : ""}
-                      </p>
-                    )}
+                  {/* Compact prompt label */}
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary/65">
+                      {guidedStepIndex + 1}/{GUIDED_PROMPTS.length} · {currentPrompt.question}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {currentPrompt.optional && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">Skip</span>
+                      )}
+                      {(isGuidedListening || isGuidedTranscribing) && (
+                        <p className="text-xs text-muted-foreground">
+                          {isGuidedListening ? "Listening…" : isGuidedTranscribing ? "Transcribing…" : ""}
+                        </p>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Transcript — auto-visible */}
+                  {currentTranscript && !showGuidedTypeInput && (
+                    <div className="rounded-2xl bg-primary/5 px-4 py-3">
+                      <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{currentTranscript}</p>
+                      <button
+                        type="button"
+                        className="mt-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => {
+                          const key = currentPrompt.key as StepKey;
+                          setStepTranscripts((current) => ({ ...current, [key]: "" }));
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Mic button */}
                   <Button
                     data-testid="button-guided-voice-footer"
                     variant="secondary"
@@ -1520,6 +1422,32 @@ export default function NewProposal() {
                       </>
                     )}
                   </Button>
+
+                  {/* Type instead toggle */}
+                  <div className="flex items-center gap-3 px-1 pt-0.5">
+                    <button
+                      type="button"
+                      className="text-[13px] font-medium text-primary transition-colors hover:text-primary/80"
+                      onClick={() => setShowGuidedTypeInput((current) => !current)}
+                    >
+                      {showGuidedTypeInput ? "Hide typing" : "Type instead"}
+                    </button>
+                  </div>
+
+                  {/* Type input */}
+                  {showGuidedTypeInput && (
+                    <Textarea
+                      data-testid="input-guided-type"
+                      className="min-h-[80px] rounded-2xl border-border/80 bg-white text-[15px] leading-7 shadow-sm resize-none"
+                      placeholder={currentPrompt.placeholder}
+                      value={currentTranscript}
+                      onChange={(e) => {
+                        const key = currentPrompt.key as StepKey;
+                        setStepTranscripts((current) => ({ ...current, [key]: e.target.value }));
+                      }}
+                      disabled={isGuidedTranscribing}
+                    />
+                  )}
                 </div>
                 <Button
                   data-testid="button-generate-proposal"
@@ -1543,7 +1471,7 @@ export default function NewProposal() {
               </>
             )}
 
-            {/* Quick step: Voice + Generate in footer */}
+            {/* Quick step: Voice + Type + Generate in footer */}
             {step === "quick" && (
               <>
                 <div className="mb-3 space-y-2 rounded-[20px] border border-border/70 bg-background/98 px-3 py-2.5 shadow-[0_10px_24px_-20px_rgba(17,24,39,0.22)]">
@@ -1555,6 +1483,8 @@ export default function NewProposal() {
                       </p>
                     )}
                   </div>
+
+                  {/* Mic button */}
                   <Button
                     data-testid="button-quick-voice-footer"
                     variant="secondary"
@@ -1583,6 +1513,29 @@ export default function NewProposal() {
                       </>
                     )}
                   </Button>
+
+                  {/* Type instead toggle */}
+                  <div className="flex items-center gap-3 px-1 pt-0.5">
+                    <button
+                      type="button"
+                      className="text-[13px] font-medium text-primary transition-colors hover:text-primary/80"
+                      onClick={() => setShowQuickTypeInput((current) => !current)}
+                    >
+                      {showQuickTypeInput ? "Hide typing" : "Type instead"}
+                    </button>
+                  </div>
+
+                  {/* Type input */}
+                  {showQuickTypeInput && (
+                    <Textarea
+                      data-testid="input-quick-type"
+                      className="min-h-[80px] rounded-2xl border-border/80 bg-white text-[15px] leading-7 shadow-sm resize-none"
+                      placeholder="e.g. Kitchen faucet replacement for John at 123 Main St. Remove old faucet, install new Delta pull-down. $650 flat, can start Thursday."
+                      value={quickTranscript}
+                      onChange={(e) => setQuickTranscript(e.target.value)}
+                      disabled={isQuickTranscribing}
+                    />
+                  )}
                 </div>
                 <Button
                   data-testid="button-quick-generate"

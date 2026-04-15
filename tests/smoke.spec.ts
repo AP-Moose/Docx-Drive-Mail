@@ -47,7 +47,7 @@ test.describe("Smoke — mobile viewport", () => {
     await expect(page.getByTestId("input-customer-name")).toBeVisible();
   });
 
-  test("new proposal flow — footer has mic button on guided step", async ({ page }) => {
+  test("new proposal flow — footer has mic button and type toggle on guided/quick step", async ({ page }) => {
     await page.goto("/");
     try { await page.getByTestId("button-new-proposal").waitFor({ state: "visible", timeout: 5_000 }); } catch {
       const pinInput = page.getByTestId("input-pin");
@@ -61,14 +61,18 @@ test.describe("Smoke — mobile viewport", () => {
     await page.getByTestId("button-add-email").click();
     await page.getByTestId("button-next").click();
 
-    // Should now be on guided or quick step — check for footer mic button
+    // Should now be on guided or quick step — check for footer mic + type toggle
     const guidedMic = page.getByTestId("button-guided-voice-footer");
     const quickMic = page.getByTestId("button-quick-voice-footer");
-    const oneVisible = await Promise.race([
+    const step = await Promise.race([
       guidedMic.waitFor({ state: "visible", timeout: 5_000 }).then(() => "guided"),
       quickMic.waitFor({ state: "visible", timeout: 5_000 }).then(() => "quick"),
     ]).catch(() => "none");
-    expect(["guided", "quick"]).toContain(oneVisible);
+    expect(["guided", "quick"]).toContain(step);
+
+    // Type instead toggle should be visible
+    const typeToggle = page.getByText("Type instead");
+    await expect(typeToggle).toBeVisible();
   });
 
   test("settings page loads and shows status sections", async ({ page }) => {

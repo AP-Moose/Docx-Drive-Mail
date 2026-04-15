@@ -134,6 +134,7 @@ Respond as JSON:
 
   const response = await openai.chat.completions.create({
     model: appConfig.openaiChatModel,
+    temperature: 0.5,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
