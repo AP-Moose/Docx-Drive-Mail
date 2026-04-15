@@ -166,6 +166,33 @@ function buildDraftText(transcripts: Record<string, string>): string {
   return parts.join("\n");
 }
 
+function buildQuickDraftTitle(text: string, jobAddress?: string): string {
+  const trade = inferTradeType(text);
+  const title = `${trade} PROPOSAL`;
+  return jobAddress ? `${title}\n${jobAddress}` : title;
+}
+
+function buildQuickDraftText(text: string): string {
+  if (!text.trim()) return "";
+  const parts: string[] = [];
+  parts.push("PROJECT SCOPE");
+  parts.push("");
+  extractBullets(text).forEach((b) => parts.push(`- ${b}`));
+  parts.push("");
+  parts.push("NEXT STEPS");
+  parts.push("");
+  parts.push("If this looks right, let us know and we'll get you on the schedule.");
+  parts.push("");
+  parts.push("ACCEPTANCE OF PROPOSAL");
+  parts.push("");
+  parts.push("Client Name (Printed): __________________________________________");
+  parts.push("");
+  parts.push("Client Signature: ________________________________________________");
+  parts.push("");
+  parts.push("Date: _______________________");
+  return parts.join("\n");
+}
+
 function buildScopeNotes(transcripts: Record<string, string>): string {
   const sections: string[] = [];
   if (transcripts.customerRequest) sections.push(`CUSTOMER REQUEST:\n${transcripts.customerRequest}`);
@@ -632,7 +659,7 @@ export default function NewProposal() {
     onError: (error) => {
       const parsed = parseApiError(error);
       toast({ title: "AI generation failed", description: parsed.message, variant: "destructive" });
-      setStep("guided");
+      setStep(guidedMode ? "guided" : "quick");
     },
   });
 
@@ -996,17 +1023,39 @@ export default function NewProposal() {
                 </span>
               </div>
 
-              {/* Transcript display */}
-              {quickTranscript && (
-                <div className="rounded-2xl bg-primary/5 border border-primary/15 px-4 py-4">
-                  <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{quickTranscript}</p>
+              {/* Live draft preview */}
+              {quickTranscript ? (
+                <details className="w-full group" open>
+                  <summary className="flex items-center gap-2 cursor-pointer px-1 list-none">
+                    <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+                      Proposal preview — updates as you talk
+                    </p>
+                    <svg className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </summary>
+                  <div className="mt-2">
+                    <ProposalPreview
+                      title={buildQuickDraftTitle(quickTranscript, form.jobAddress)}
+                      text={buildQuickDraftText(quickTranscript)}
+                      customerName={form.customerName}
+                      jobAddress={form.jobAddress || undefined}
+                    />
+                  </div>
                   <button
                     type="button"
-                    className="mt-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                    className="mt-2 px-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                     onClick={() => setQuickTranscript("")}
                   >
-                    Clear
+                    Clear transcript
                   </button>
+                </details>
+              ) : (
+                <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-border/50 bg-muted/15 px-6 py-12 text-center w-full">
+                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/8">
+                    <Mic className="h-5 w-5 text-primary/50" />
+                  </div>
+                  <p className="text-sm font-semibold text-muted-foreground">Proposal preview appears here</p>
+                  <p className="mt-1 text-xs text-muted-foreground/60">Tap the mic below and start talking — it updates live</p>
                 </div>
               )}
             </div>
