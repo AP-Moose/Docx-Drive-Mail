@@ -8,7 +8,7 @@ export function loadSettings(): AppSettings {
   try {
     return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") as AppSettings;
   } catch {
-    return { guidedPrompts: true };
+    return { guidedPrompts: false };
   }
 }
 
@@ -19,7 +19,7 @@ export function saveSetting<K extends keyof AppSettings>(key: K, value: AppSetti
 }
 
 export function isGuidedPromptsEnabled(): boolean {
-  return loadSettings().guidedPrompts !== false;
+  return loadSettings().guidedPrompts === true;
 }
 
 export function setGuidedPromptsEnabled(on: boolean) {

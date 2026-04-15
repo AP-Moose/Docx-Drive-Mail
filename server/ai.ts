@@ -116,7 +116,8 @@ Date: _______________________
 
 Important reminders:
 - Infer the right trade type from the work described and use it in the title
-- If notes have a PRICING section, use that exact price — don't make one up
+- If notes have a PRICING section, use that exact price
+- If no price is provided, estimate a realistic flat-rate for this type and scope of work — the contractor will review and correct if needed
 - If notes have a TIMELINE section, use that — don't invent one
 - If exclusions or open items are mentioned, include them honestly in PROJECT DETAILS
 - Do not add sections that aren't in the example

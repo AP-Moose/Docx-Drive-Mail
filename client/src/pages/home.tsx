@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { Clock, FileText, Plus, Settings } from "lucide-react";
-import logoPath from "@assets/logo.png";
+import logoPath from "@assets/prolynk-logo.png";
 
 export default function Home() {
   const [, navigate] = useLocation();
@@ -10,10 +10,10 @@ export default function Home() {
       <div className="bg-primary px-5 pt-8 pb-5 text-primary-foreground">
         <div className="flex items-center gap-3">
           <div className="rounded-xl bg-white/95 px-2 py-1.5 shadow-sm">
-            <img src={logoPath} alt="Inspiring Services" className="h-7 w-auto" />
+            <img src={logoPath} alt="ProLynk" className="h-7 w-auto" />
           </div>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-primary-foreground/70">Inspiring Services</p>
+            <a href="https://system.prolynk.io" target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold uppercase tracking-[0.26em] text-primary-foreground/70 hover:text-primary-foreground transition-colors">Dave · ProLynk</a>
             <h1 className="text-lg font-bold leading-tight">Proposal Builder</h1>
           </div>
         </div>
@@ -24,7 +24,7 @@ export default function Home() {
           <button
             data-testid="button-new-proposal"
             onClick={() => navigate("/new?mode=proposal_email")}
-            className="w-full rounded-[30px] bg-[linear-gradient(180deg,#14532d_0%,#166534_100%)] px-6 py-7 text-left text-white shadow-[0_28px_60px_-34px_rgba(22,101,52,0.7)] transition-transform active:scale-[0.99]"
+            className="w-full rounded-[30px] bg-[linear-gradient(90deg,#6366FF_0%,#4F46FF_100%)] px-6 py-7 text-left text-white shadow-[0_28px_60px_-34px_rgba(99,102,255,0.5)] transition-transform active:scale-[0.99]"
           >
             <div className="flex items-start gap-4">
               <div className="rounded-full bg-white/10 p-4">

@@ -1,4 +1,4 @@
-import logoPath from "@assets/Inspiringservices_1772928567649.avif";
+import logoPath from "@assets/prolynk-logo.png";
 
 interface ProposalPreviewProps {
   title?: string;
@@ -157,8 +157,8 @@ export default function ProposalPreview({
         }
         .proposal-preview-logo {
           display: block;
-          max-width: 154px;
-          height: auto;
+          max-height: 48px;
+          width: auto;
         }
         .proposal-preview-meta {
           text-align: right;
@@ -251,7 +251,7 @@ export default function ProposalPreview({
       <div className="proposal-preview-topbar">
         <img
           src={logoPath}
-          alt="Inspiring Services"
+          alt="ProLynk"
           className="proposal-preview-logo"
           data-testid="preview-logo"
         />

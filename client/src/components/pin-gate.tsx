@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import logoPath from "@assets/logo.png";
+import logoPath from "@assets/prolynk-logo.png";
 
 const PIN_STORAGE_KEY = "app_pin_verified";
 
@@ -103,7 +103,7 @@ export function PinGate({ children }: PinGateProps) {
         <div className="bg-white rounded-2xl px-5 py-3 shadow-sm">
           <img
             src={logoPath}
-            alt="Inspiring Services"
+            alt="ProLynk"
             className="w-36 object-contain"
             data-testid="img-logo"
           />

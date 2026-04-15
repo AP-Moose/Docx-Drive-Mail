@@ -12,7 +12,7 @@ import type { Proposal } from "@shared/schema";
 import * as fs from "fs";
 import * as path from "path";
 
-const logoPath = path.resolve("attached_assets/logo.png");
+const logoPath = path.resolve("attached_assets/prolynk-logo.png");
 let logoBuffer: Buffer | null = null;
 try {
   logoBuffer = fs.readFileSync(logoPath);
@@ -168,7 +168,7 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
   }
 
   const doc = new Document({
-    creator: "Inspiring Services",
+    creator: "ProLynk",
     title: proposal.proposalTitle || "Proposal",
     description: `Proposal for ${proposal.customerName}`,
     sections: [
