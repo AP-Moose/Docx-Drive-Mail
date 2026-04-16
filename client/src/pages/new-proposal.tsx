@@ -166,7 +166,7 @@ function buildDraftText(transcripts: Record<string, string>): string {
   return parts.join("\n");
 }
 
-function buildQuickDraftTitle(jobAddress?: string): string {
+function buildQuickDraftTitle(_text: string, jobAddress?: string): string {
   return jobAddress ? `PROPOSAL\n${jobAddress}` : "PROPOSAL";
 }
 
@@ -238,10 +238,10 @@ function parseApiError(error: unknown): { message: string; code?: string } {
 
 // ─── UI Subcomponents ────────────────────────────────────────────────────────
 function ProgressBar({ step, guided }: { step: Step; guided: boolean }) {
-  const displaySteps = guided ? ["info", "guided", "review", "confirm", "done"] : ["info", "quick", "review", "confirm", "done"];
+  const displaySteps = guided ? ["info", "guided", "confirm", "done"] : ["info", "quick", "confirm", "done"];
   let displayIndex = displaySteps.indexOf(step);
-  if (step === "generating") displayIndex = 2;
-  if (step === "saving") displayIndex = 3;
+  if (step === "review" || step === "generating") displayIndex = 1;
+  if (step === "saving") displayIndex = 2;
   const progress = ((Math.max(displayIndex, 0) + 1) / displaySteps.length) * 100;
   return (
     <div className="w-full rounded-full bg-white/20 h-1.5">
@@ -251,16 +251,16 @@ function ProgressBar({ step, guided }: { step: Step; guided: boolean }) {
 }
 
 function StepLabel({ step, mode, guided }: { step: Step; mode: string; guided: boolean }) {
-  const total = "5";
+  const total = "4";
   const labels: Record<Step, string> = {
     info: `Step 1 of ${total}  Customer details`,
     guided: `Step 2 of ${total}  Describe the work`,
     quick: `Step 2 of ${total}  Describe the work`,
     generating: "Writing a customer-ready proposal",
-    review: `Step 3 of ${total}  Review the proposal`,
-    confirm: mode === "proposal_email" ? `Step 4 of ${total}  Final send check` : `Step 4 of ${total}  Final save check`,
+    review: `Step 2 of ${total}  Review the proposal`,
+    confirm: mode === "proposal_email" ? `Step 3 of ${total}  Final send check` : `Step 3 of ${total}  Final save check`,
     saving: mode === "proposal_email" ? "Sending your proposal package" : "Saving your proposal package",
-    done: `Step 5 of ${total}  Completed`,
+    done: `Step 4 of ${total}  Completed`,
   };
   return <p className="mt-3 text-sm text-primary-foreground/80">{labels[step]}</p>;
 }
@@ -1023,30 +1023,29 @@ export default function NewProposal() {
 
               {/* Live draft preview */}
               {quickTranscript ? (
-                <details className="w-full group" open>
-                  <summary className="flex items-center gap-2 cursor-pointer px-1 list-none">
-                    <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
-                      Proposal preview — updates as you talk
-                    </p>
-                    <svg className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                  </summary>
-                  <div className="mt-2">
-                    <ProposalPreview
-                      title={buildQuickDraftTitle(form.jobAddress)}
-                      text={buildQuickDraftText(quickTranscript)}
-                      customerName={form.customerName}
-                      jobAddress={form.jobAddress || undefined}
-                    />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                      <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+                        Proposal preview — updates as you talk
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={() => setQuickTranscript("")}
+                    >
+                      Clear
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="mt-2 px-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => setQuickTranscript("")}
-                  >
-                    Clear transcript
-                  </button>
-                </details>
+                  <ProposalPreview
+                    title={buildQuickDraftTitle(quickTranscript, form.jobAddress)}
+                    text={buildQuickDraftText(quickTranscript)}
+                    customerName={form.customerName}
+                    jobAddress={form.jobAddress || undefined}
+                  />
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-border/50 bg-muted/15 px-6 py-12 text-center w-full">
                   <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/8">
@@ -1084,30 +1083,27 @@ export default function NewProposal() {
               </div>
 
               <div className="space-y-3 rounded-[28px] border border-border/80 bg-card px-5 py-4 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.28)]">
-                <div className="space-y-2 rounded-2xl border border-border/80 bg-background px-4 py-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Edit proposal text</p>
-                  <Textarea
-                    data-testid="textarea-proposal"
-                    className="min-h-[220px] rounded-[24px] border-border/80 bg-card px-5 py-5 font-mono text-sm leading-7 resize-none"
-                    value={editedText}
-                    onChange={(event) => setEditedText(event.target.value)}
-                  />
-                </div>
+                <ProposalPreview
+                  title={proposal.proposalTitle || undefined}
+                  text={editedText}
+                  customerName={proposal.customerName}
+                  customerEmail={proposal.customerEmail || undefined}
+                  jobAddress={proposal.jobAddress || undefined}
+                />
 
                 <details className="w-full group">
-                  <summary className="flex items-center gap-2 cursor-pointer px-1 list-none">
-                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
-                      Customer preview
-                    </p>
+                  <summary className="flex items-center gap-2 cursor-pointer px-1 py-1 list-none">
                     <svg className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+                      Edit proposal text
+                    </p>
                   </summary>
-                  <div className="mt-2">
-                    <ProposalPreview
-                      title={proposal.proposalTitle || undefined}
-                      text={editedText}
-                      customerName={proposal.customerName}
-                      customerEmail={proposal.customerEmail || undefined}
-                      jobAddress={proposal.jobAddress || undefined}
+                  <div className="mt-2 space-y-2 rounded-2xl border border-border/80 bg-background px-4 py-4">
+                    <Textarea
+                      data-testid="textarea-proposal"
+                      className="min-h-[220px] rounded-[24px] border-border/80 bg-card px-5 py-5 font-mono text-sm leading-7 resize-none"
+                      value={editedText}
+                      onChange={(event) => setEditedText(event.target.value)}
                     />
                   </div>
                 </details>

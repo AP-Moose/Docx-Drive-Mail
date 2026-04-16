@@ -83,7 +83,7 @@ export async function generateDocx(proposal: Proposal): Promise<{ buffer: Buffer
         children: [
           new ImageRun({
             data: logoBuffer,
-            transformation: { width: 280, height: 120 },
+            transformation: { width: 420, height: 180 },
             type: "png",
           }),
         ],
