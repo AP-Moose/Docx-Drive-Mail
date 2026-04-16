@@ -238,10 +238,10 @@ function parseApiError(error: unknown): { message: string; code?: string } {
 
 // ─── UI Subcomponents ────────────────────────────────────────────────────────
 function ProgressBar({ step, guided }: { step: Step; guided: boolean }) {
-  const displaySteps = guided ? ["info", "guided", "review", "confirm", "done"] : ["info", "quick", "review", "confirm", "done"];
+  const displaySteps = guided ? ["info", "guided", "confirm", "done"] : ["info", "quick", "confirm", "done"];
   let displayIndex = displaySteps.indexOf(step);
-  if (step === "generating") displayIndex = 2;
-  if (step === "saving") displayIndex = 3;
+  if (step === "review" || step === "generating") displayIndex = 1;
+  if (step === "saving") displayIndex = 2;
   const progress = ((Math.max(displayIndex, 0) + 1) / displaySteps.length) * 100;
   return (
     <div className="w-full rounded-full bg-white/20 h-1.5">
@@ -251,16 +251,16 @@ function ProgressBar({ step, guided }: { step: Step; guided: boolean }) {
 }
 
 function StepLabel({ step, mode, guided }: { step: Step; mode: string; guided: boolean }) {
-  const total = "5";
+  const total = "4";
   const labels: Record<Step, string> = {
     info: `Step 1 of ${total}  Customer details`,
     guided: `Step 2 of ${total}  Describe the work`,
     quick: `Step 2 of ${total}  Describe the work`,
     generating: "Writing a customer-ready proposal",
-    review: `Step 3 of ${total}  Review the proposal`,
-    confirm: mode === "proposal_email" ? `Step 4 of ${total}  Final send check` : `Step 4 of ${total}  Final save check`,
+    review: `Step 2 of ${total}  Review the proposal`,
+    confirm: mode === "proposal_email" ? `Step 3 of ${total}  Final send check` : `Step 3 of ${total}  Final save check`,
     saving: mode === "proposal_email" ? "Sending your proposal package" : "Saving your proposal package",
-    done: `Step 5 of ${total}  Completed`,
+    done: `Step 4 of ${total}  Completed`,
   };
   return <p className="mt-3 text-sm text-primary-foreground/80">{labels[step]}</p>;
 }

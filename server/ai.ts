@@ -45,7 +45,7 @@ Formatting rules:
 - TOTAL INVESTMENT: price on its own line. One plain sentence about what's included. Nothing more.
 - DEPOSIT SCHEDULE: standard thirds. Calculate the dollar amounts. Bullet list.
 - PROJECT DETAILS: short bullets. Timeline, exclusions, open items. Honest.
-- NEXT STEPS: 2 sentences max. What happens if they say yes. Practical. Not salesy.
+- NEXT STEPS: The contractor has already been to the job — never mention scheduling a site visit, walkthrough, or initial assessment. Focus on what comes after signing: scheduling the work date, collecting the deposit, or ordering materials. 2 sentences max. Practical. Not salesy.
 - ACCEPTANCE OF PROPOSAL: three lines exactly as shown in the example.
 
 Never use [TBD], [INSERT], or any bracket placeholders in the proposal body.
