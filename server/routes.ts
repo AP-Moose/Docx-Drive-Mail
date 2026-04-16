@@ -236,7 +236,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       google: {
         providerMode,
         oauthConfigured: hasGoogleOAuthConfig(),
-        usingReplitConnectors: providerMode === "replit",
+        usingReplitConnectors: false,
       },
     });
   });

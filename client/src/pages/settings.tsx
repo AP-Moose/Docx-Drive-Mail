@@ -39,7 +39,7 @@ interface RuntimeStatus {
     connected: boolean;
   };
   google: {
-    providerMode: "inapp" | "oauth" | "replit" | "none";
+    providerMode: "inapp" | "none";
     oauthConfigured: boolean;
     usingReplitConnectors: boolean;
   };
@@ -147,7 +147,6 @@ export default function Settings() {
   const isFetching = connectionsFetching || runtimeFetching;
   const isConnected = connections?.drive.connected || connections?.gmail.connected;
   const canConnect = runtime?.google.oauthConfigured;
-  const usingReplit = runtime?.google.providerMode === "replit";
 
   const refreshAll = async () => {
     await Promise.all([refetchConnections(), refetchRuntime()]);
@@ -234,7 +233,7 @@ export default function Settings() {
                 }
               />
 
-              {!usingReplit && canConnect && isConnected && (
+              {canConnect && isConnected && (
                 <Button
                   data-testid="button-disconnect-google"
                   variant="outline"
@@ -251,31 +250,18 @@ export default function Settings() {
                 </Button>
               )}
 
-              {!usingReplit && canConnect && !isConnected && (
-                <>
-                  <a
-                    href="/auth/google"
-                    data-testid="button-connect-google"
-                    className="flex items-center justify-center gap-2 w-full rounded-md border border-primary/30 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium transition-colors hover:bg-primary/90"
-                  >
-                    <Link className="w-4 h-4" />
-                    Connect Google account
-                  </a>
-                  <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      Authorized redirect URI
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-                      Make sure this is added in your Google Cloud Console → OAuth credentials → Authorized redirect URIs:
-                    </p>
-                    <p className="text-xs font-mono text-slate-800 dark:text-slate-200 break-all bg-slate-100 dark:bg-slate-800 rounded px-2 py-1.5 select-all">
-                      {window.location.origin}/auth/google/callback
-                    </p>
-                  </div>
-                </>
+              {canConnect && !isConnected && (
+                <a
+                  href="/auth/google"
+                  data-testid="button-connect-google"
+                  className="flex items-center justify-center gap-2 w-full rounded-md border border-primary/30 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium transition-colors hover:bg-primary/90"
+                >
+                  <Link className="w-4 h-4" />
+                  Connect Google account
+                </a>
               )}
 
-              {!usingReplit && !canConnect && (
+              {!canConnect && (
                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mt-2">
                   <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
                     Google OAuth not configured
@@ -287,19 +273,6 @@ export default function Settings() {
                   </p>
                   <p className="mt-2 text-xs font-mono text-amber-800 break-all bg-amber-100 rounded px-2 py-1">
                     {window.location.origin}/auth/google/callback
-                  </p>
-                </div>
-              )}
-
-              {usingReplit && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mt-2">
-                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">
-                    Using Replit connector auth
-                  </p>
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    Connections are managed through Replit. To enable self-service sign-in, add{" "}
-                    <code className="font-mono bg-blue-100 px-1 rounded">GOOGLE_CLIENT_ID</code> and{" "}
-                    <code className="font-mono bg-blue-100 px-1 rounded">GOOGLE_CLIENT_SECRET</code> as Secrets.
                   </p>
                 </div>
               )}
@@ -412,9 +385,7 @@ export default function Settings() {
                 description={
                   runtime.google.providerMode === "inapp"
                     ? "In-app OAuth — contractors connect via Sign in with Google"
-                    : runtime.google.providerMode === "replit"
-                      ? "Using Replit connectors for Drive and Gmail access"
-                      : "No Google provider is configured"
+                    : "No Google provider is configured"
                 }
                 ok={runtime.google.providerMode !== "none"}
                 icon={

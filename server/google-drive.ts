@@ -1,9 +1,7 @@
 /**
- * Google Drive integration.
- * Prefers in-app OAuth token (stored in DB) when available.
- * Falls back to Replit Connectors SDK if no in-app token exists.
+ * Google Drive integration — in-app OAuth only.
+ * Requires a stored OAuth token from the in-app Google sign-in flow.
  */
-import { ReplitConnectors } from "@replit/connectors-sdk";
 import { getStoredAccessToken, hasStoredToken, getStoredTokenEmail } from "./google-token";
 
 interface DriveAbout {
@@ -37,24 +35,16 @@ interface DriveUploadCreated {
 }
 
 export async function isDriveConnected(): Promise<boolean> {
-  const hasToken = await hasStoredToken();
-  if (hasToken) return true;
-  return !!process.env.REPLIT_CONNECTORS_HOSTNAME;
+  return hasStoredToken();
 }
 
 export async function testDriveConnection(): Promise<boolean> {
   try {
-    const storedToken = await getStoredAccessToken();
-    if (storedToken) {
-      const resp = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {
-        headers: { Authorization: `Bearer ${storedToken}` },
-      });
-      const data: DriveAbout = await resp.json() as DriveAbout;
-      return !!data.user;
-    }
-    if (!process.env.REPLIT_CONNECTORS_HOSTNAME) return false;
-    const connectors = getConnectors();
-    const resp = await connectors.proxy("google-drive", "/drive/v3/about?fields=user", { method: "GET" });
+    const token = await getStoredAccessToken();
+    if (!token) return false;
+    const resp = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const data: DriveAbout = await resp.json() as DriveAbout;
     return !!data.user;
   } catch {
@@ -66,9 +56,11 @@ export async function getDriveUserEmail(): Promise<string | null> {
   try {
     const storedEmail = await getStoredTokenEmail();
     if (storedEmail) return storedEmail;
-    if (!process.env.REPLIT_CONNECTORS_HOSTNAME) return null;
-    const connectors = getConnectors();
-    const resp = await connectors.proxy("google-drive", "/drive/v3/about?fields=user(emailAddress)", { method: "GET" });
+    const token = await getStoredAccessToken();
+    if (!token) return null;
+    const resp = await fetch("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const data: DriveAbout = await resp.json() as DriveAbout;
     return data.user?.emailAddress ?? null;
   } catch {
@@ -76,45 +68,29 @@ export async function getDriveUserEmail(): Promise<string | null> {
   }
 }
 
-function getConnectors() {
-  return new ReplitConnectors();
+async function getToken(): Promise<string> {
+  const token = await getStoredAccessToken();
+  if (!token) throw new Error("GOOGLE_DRIVE_NOT_CONNECTED");
+  return token;
 }
 
 async function driveRequest<T>(endpoint: string, options: RequestInit & { body?: unknown }): Promise<T> {
-  const storedToken = await getStoredAccessToken();
-  if (storedToken) {
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${storedToken}`,
-      ...((options.headers as Record<string, string>) || {}),
-    };
-    const resp = await fetch(`https://www.googleapis.com${endpoint}`, {
-      ...options,
-      headers,
-    });
-    return resp.json() as Promise<T>;
-  }
-  if (!process.env.REPLIT_CONNECTORS_HOSTNAME) {
-    throw new Error("GOOGLE_DRIVE_NOT_CONNECTED");
-  }
-  const connectors = getConnectors();
-  const resp = await connectors.proxy("google-drive", endpoint, options as Parameters<typeof connectors.proxy>[2]);
+  const token = await getToken();
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    ...((options.headers as Record<string, string>) || {}),
+  };
+  const resp = await fetch(`https://www.googleapis.com${endpoint}`, { ...options, headers });
   return resp.json() as Promise<T>;
 }
 
 async function driveRequestRaw(endpoint: string, options: RequestInit & { body?: unknown }): Promise<Response> {
-  const storedToken = await getStoredAccessToken();
-  if (storedToken) {
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${storedToken}`,
-      ...((options.headers as Record<string, string>) || {}),
-    };
-    return fetch(`https://www.googleapis.com${endpoint}`, { ...options, headers });
-  }
-  if (!process.env.REPLIT_CONNECTORS_HOSTNAME) {
-    throw new Error("GOOGLE_DRIVE_NOT_CONNECTED");
-  }
-  const connectors = getConnectors();
-  return connectors.proxy("google-drive", endpoint, options as Parameters<typeof connectors.proxy>[2]);
+  const token = await getToken();
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    ...((options.headers as Record<string, string>) || {}),
+  };
+  return fetch(`https://www.googleapis.com${endpoint}`, { ...options, headers });
 }
 
 async function findFolder(name: string, parentId: string | null): Promise<string | null> {
@@ -200,7 +176,7 @@ export async function uploadToDrive(
   if (!uploadContentType.includes("application/json") && !uploadContentType.includes("text/json")) {
     const preview = await uploadResp.text();
     console.error("Drive upload returned non-JSON (status", uploadResp.status, "):", preview.substring(0, 300));
-    throw new Error("Google Drive authentication failed — please reconnect your Google account in Settings and try again.");
+    throw new Error("Google Drive authentication failed — please reconnect your Google account in Settings.");
   }
 
   const uploadData: DriveUploadCreated = await uploadResp.json() as DriveUploadCreated;
