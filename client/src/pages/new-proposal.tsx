@@ -166,10 +166,8 @@ function buildDraftText(transcripts: Record<string, string>): string {
   return parts.join("\n");
 }
 
-function buildQuickDraftTitle(text: string, jobAddress?: string): string {
-  const trade = inferTradeType(text);
-  const title = `${trade} PROPOSAL`;
-  return jobAddress ? `${title}\n${jobAddress}` : title;
+function buildQuickDraftTitle(_text: string, jobAddress?: string): string {
+  return jobAddress ? `PROPOSAL\n${jobAddress}` : "PROPOSAL";
 }
 
 function buildQuickDraftText(text: string): string {
@@ -1025,30 +1023,29 @@ export default function NewProposal() {
 
               {/* Live draft preview */}
               {quickTranscript ? (
-                <details className="w-full group" open>
-                  <summary className="flex items-center gap-2 cursor-pointer px-1 list-none">
-                    <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
-                      Proposal preview — updates as you talk
-                    </p>
-                    <svg className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                  </summary>
-                  <div className="mt-2">
-                    <ProposalPreview
-                      title={buildQuickDraftTitle(quickTranscript, form.jobAddress)}
-                      text={buildQuickDraftText(quickTranscript)}
-                      customerName={form.customerName}
-                      jobAddress={form.jobAddress || undefined}
-                    />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                      <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+                        Proposal preview — updates as you talk
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={() => setQuickTranscript("")}
+                    >
+                      Clear
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="mt-2 px-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => setQuickTranscript("")}
-                  >
-                    Clear transcript
-                  </button>
-                </details>
+                  <ProposalPreview
+                    title={buildQuickDraftTitle(quickTranscript, form.jobAddress)}
+                    text={buildQuickDraftText(quickTranscript)}
+                    customerName={form.customerName}
+                    jobAddress={form.jobAddress || undefined}
+                  />
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-border/50 bg-muted/15 px-6 py-12 text-center w-full">
                   <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/8">
