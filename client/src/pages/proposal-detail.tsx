@@ -125,6 +125,13 @@ export default function ProposalDetail() {
       setFinalizeResult(result);
       qc.invalidateQueries({ queryKey: ["/api/proposals", id] });
       qc.invalidateQueries({ queryKey: ["/api/proposals"] });
+      const isSend = result.proposal.mode === "proposal_email";
+      toast({
+        title: isSend ? "Proposal sent!" : "Proposal saved!",
+        description: isSend
+          ? "The Word doc is in Drive and the email is on its way."
+          : "The Word doc has been saved to Google Drive.",
+      });
     },
     onError: (error) => {
       toast({ title: "Could not finish proposal", description: parseApiError(error), variant: "destructive" });
@@ -221,6 +228,46 @@ export default function ProposalDetail() {
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f7f8f6_0%,#ffffff_22%,#ffffff_100%)]">
+      {finalizeMutation.isPending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm px-5">
+          <div className="w-full max-w-sm space-y-6 rounded-[28px] border border-primary/15 bg-card px-6 py-8 shadow-[0_20px_60px_-30px_rgba(17,24,39,0.35)]">
+            <div className="space-y-3 text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+                {proposal.mode === "proposal_email" ? "Sending proposal" : "Saving proposal"}
+              </p>
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-primary/15 bg-primary/10">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-semibold tracking-tight">
+                  {proposal.mode === "proposal_email" ? "Packaging and sending…" : "Packaging and saving…"}
+                </h2>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {proposal.mode === "proposal_email"
+                    ? "Generating the Word doc, uploading to Drive, and emailing the customer."
+                    : "Generating the Word doc and uploading to Drive."}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2 rounded-2xl bg-muted/55 p-4">
+              {(proposal.mode === "proposal_email"
+                ? ["Generating the Word document", "Saving to Google Drive", "Sending the customer email"]
+                : ["Generating the Word document", "Saving to Google Drive"]
+              ).map((label, i) => (
+                <div key={label} className="flex items-center gap-3 rounded-xl bg-background/75 px-4 py-3">
+                  {i === 0 ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
+                  ) : (
+                    <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/40 shrink-0" />
+                  )}
+                  <span className={i === 0 ? "text-sm font-medium" : "text-sm text-muted-foreground"}>{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto flex min-h-screen max-w-2xl flex-col">
         <div className="bg-primary px-5 pb-6 pt-10 text-primary-foreground">
           <div className="flex items-center gap-3">

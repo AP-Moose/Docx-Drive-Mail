@@ -9,8 +9,8 @@ Mobile-first web app for contractors to create professional proposals, upload to
 - **Database**: PostgreSQL via Drizzle ORM
 - **AI**: OpenAI (gpt-5.1) via Replit AI Integrations
 - **Branding**: Green theme matching Inspiring Services logo (HSL 134 76% 38%)
-- **Google Drive**: Replit Connectors SDK (`@replit/connectors-sdk` proxy pattern)
-- **Gmail**: googleapis + Replit Connectors (gmail.send scope — sends directly, no draft creation)
+- **Google Drive**: In-app OAuth only — stored token in `google_tokens` table, auto-refreshes via refresh token
+- **Gmail**: googleapis with in-app OAuth token (gmail.send scope — sends directly, no draft creation)
 
 ## Pipeline
 
@@ -25,12 +25,12 @@ Mobile-first web app for contractors to create professional proposals, upload to
 
 - `shared/schema.ts` — Drizzle schema, types, insert schemas (gmailMessageId column)
 - `server/config.ts` — Centralized config: AI_INTEGRATIONS_OPENAI_API_KEY > OPENAI_API_KEY priority
-- `server/google-auth.ts` — getGoogleProviderMode() → "replit" | "oauth" | "none"
+- `server/google-auth.ts` — getGoogleProviderMode() → "inapp" | "none"
 - `server/routes.ts` — API routes: CRUD, generate, refine, finalize, docx, drive-upload, send-email, settings/runtime
 - `server/ai.ts` — OpenAI proposal generation (infers project type; structured format)
 - `server/docx-generator.ts` — .docx generation via `docx` package (includes Inspiring Services logo at top)
-- `server/google-drive.ts` — Drive upload with folder hierarchy + public permission (Replit Connectors)
-- `server/google-mail.ts` — sendGmailMessage() via googleapis + Replit Connectors (gmail.send scope)
+- `server/google-drive.ts` — Drive upload with folder hierarchy + public permission (in-app OAuth only)
+- `server/google-mail.ts` — sendGmailMessage() via googleapis with in-app OAuth token
 - `server/storage.ts` — IStorage interface + DatabaseStorage implementation
 - `client/src/components/proposal-preview.tsx` — Rich formatted proposal preview (matches Drive/docx styling)
 - `client/src/pages/new-proposal.tsx` — 5-step wizard (info → scope → review → confirm → done)
@@ -82,8 +82,9 @@ Mobile-first web app for contractors to create professional proposals, upload to
 
 ## Important Notes
 
-- Gmail connector only has `gmail.send` scope — uses `users.messages.send` not `users.drafts.create`
-- Google Drive uses `@replit/connectors-sdk` proxy — never cache the client
-- Gmail uses `googleapis` with fresh token fetch — never cache the client
-- Connection IDs: Drive `conn_google-drive_01KK2ZF93P7P2SGY6MJ22YKYB3`, Gmail `conn_google-mail_01KK2ZW3XA21BVEEFSM7VC7Y6R`
+- Gmail only has `gmail.send` scope — uses `users.messages.send` not `users.drafts.create`
+- Google auth is pure in-app OAuth (GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET). No Replit Connectors fallback.
+- Token stored in `google_tokens` DB table with refresh token — persists across sessions and auto-refreshes
+- After disconnect, Settings shows "Connect Google account" button immediately
+- Proposal detail page shows full-screen loading overlay during finalize + success toast on completion
 - Versioning is by customer name only (not name + project type)
