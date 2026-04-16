@@ -1086,30 +1086,27 @@ export default function NewProposal() {
               </div>
 
               <div className="space-y-3 rounded-[28px] border border-border/80 bg-card px-5 py-4 shadow-[0_20px_60px_-35px_rgba(17,24,39,0.28)]">
-                <div className="space-y-2 rounded-2xl border border-border/80 bg-background px-4 py-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">Edit proposal text</p>
-                  <Textarea
-                    data-testid="textarea-proposal"
-                    className="min-h-[220px] rounded-[24px] border-border/80 bg-card px-5 py-5 font-mono text-sm leading-7 resize-none"
-                    value={editedText}
-                    onChange={(event) => setEditedText(event.target.value)}
-                  />
-                </div>
+                <ProposalPreview
+                  title={proposal.proposalTitle || undefined}
+                  text={editedText}
+                  customerName={proposal.customerName}
+                  customerEmail={proposal.customerEmail || undefined}
+                  jobAddress={proposal.jobAddress || undefined}
+                />
 
                 <details className="w-full group">
-                  <summary className="flex items-center gap-2 cursor-pointer px-1 list-none">
-                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
-                      Customer preview
-                    </p>
+                  <summary className="flex items-center gap-2 cursor-pointer px-1 py-1 list-none">
                     <svg className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+                      Edit proposal text
+                    </p>
                   </summary>
-                  <div className="mt-2">
-                    <ProposalPreview
-                      title={proposal.proposalTitle || undefined}
-                      text={editedText}
-                      customerName={proposal.customerName}
-                      customerEmail={proposal.customerEmail || undefined}
-                      jobAddress={proposal.jobAddress || undefined}
+                  <div className="mt-2 space-y-2 rounded-2xl border border-border/80 bg-background px-4 py-4">
+                    <Textarea
+                      data-testid="textarea-proposal"
+                      className="min-h-[220px] rounded-[24px] border-border/80 bg-card px-5 py-5 font-mono text-sm leading-7 resize-none"
+                      value={editedText}
+                      onChange={(event) => setEditedText(event.target.value)}
                     />
                   </div>
                 </details>
