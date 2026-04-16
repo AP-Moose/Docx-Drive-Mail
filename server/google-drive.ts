@@ -196,6 +196,13 @@ export async function uploadToDrive(
     }
   );
 
+  const uploadContentType = uploadResp.headers.get("content-type") ?? "";
+  if (!uploadContentType.includes("application/json") && !uploadContentType.includes("text/json")) {
+    const preview = await uploadResp.text();
+    console.error("Drive upload returned non-JSON (status", uploadResp.status, "):", preview.substring(0, 300));
+    throw new Error("Google Drive authentication failed — please reconnect your Google account in Settings and try again.");
+  }
+
   const uploadData: DriveUploadCreated = await uploadResp.json() as DriveUploadCreated;
   if (!uploadData.id) throw new Error(`Drive upload failed: ${JSON.stringify(uploadData)}`);
 
